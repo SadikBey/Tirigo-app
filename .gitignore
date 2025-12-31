@@ -1,0 +1,97 @@
+# Flutter/Dart
+# See https://www.dartlang.org/guides/libraries/private-files
+
+# Flutter build outputs
+/build/
+/flutter_build/
+
+# Dart/Pub related
+.dart_tool/
+.packages
+.pub/
+.package_config.json
+
+# Generated plugin files
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# iOS
+**/ios/Pods/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/ServiceDefinitions.json
+**/ios/Runner.xcworkspace/
+**/ios/Runner/GeneratedPluginRegistrant.*
+*.xcuserstate
+*.xcworkspace
+DerivedData/
+*.xcuserdatad
+
+# Android
+**/android/.gradle/
+**/android/local.properties
+**/android/key.properties
+**/android/*.keystore
+**/android/*.jks
+**/android/app/google-services.json
+**/gradle-app.setting
+
+# Windows
+windows/Flutter/ephemeral/
+
+# macOS
+macos/Flutter/ephemeral/
+
+# VS Code
+.vscode/
+.vscode/*
+
+# IntelliJ / Android Studio
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# JetBrains
+*.log
+
+# Files that might have secrets
+.env
+.env.*
+*.env
+*.secret
+secret.*
+serviceAccountKey.json
+credentials.json
+google-services.json
+GoogleService-Info.plist
+lib/firebase_options.dart
+
+# Temporary files
+*.swp
+*~
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Coverage
+coverage/
+
+# Misc
+.pub-cache/
+
+# Ignore build outputs from CI
+/build
+
+# Keep the flutter tool state local
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Keep generated localization files out
+**.dart_tool/gen_l10n/
+
+# End of file
