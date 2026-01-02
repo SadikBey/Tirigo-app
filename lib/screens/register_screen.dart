@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Veritabanı için eklendi
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'main_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -11,24 +11,27 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  // Controller'lar
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  
+  final _companyNameController = TextEditingController(); // Şirket adı için
+
   bool _isLoading = false;
   bool _obscureText = true;
+  
+  // ROL SEÇİMİ İÇİN DEĞİŞKENLER
+  // true ise Şirket (İş Veren), false ise Şoför
+  bool _isCompany = false; 
 
-  // --- Kayıt ve Veritabanına Kaydetme Fonksiyonu ---
   Future<void> _register() async {
-    // 1. Boşluk Kontrolü
     if (_firstNameController.text.isEmpty || 
         _lastNameController.text.isEmpty || 
         _phoneController.text.isEmpty || 
         _emailController.text.isEmpty || 
-        _passwordController.text.isEmpty) {
+        _passwordController.text.isEmpty ||
+        (_isCompany && _companyNameController.text.isEmpty)) { // Şirket seçiliyse ad kontrolü
       _showMessage("Lütfen tüm alanları doldurun.");
       return;
     }
@@ -36,19 +39,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 2. Firebase Auth ile Kullanıcı Oluşturma
       UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
-      // 3. Kullanıcı bilgilerini Firestore'a (veritabanına) kaydetme
+      // --- Veritabanına Kayıt (Dinamik Rol ile) ---
       await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
         'firstName': _firstNameController.text.trim(),
         'lastName': _lastNameController.text.trim(),
         'phone': _phoneController.text.trim(),
         'email': _emailController.text.trim(),
-        'role': 'driver', // Varsayılan olarak şoför rolü
+        'role': _isCompany ? 'company' : 'driver', // Seçime göre kayıt
+        'companyName': _isCompany ? _companyNameController.text.trim() : null,
         'createdAt': DateTime.now(),
       });
 
@@ -80,7 +83,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1B263B), // Koyu Mavi
+      backgroundColor: const Color(0xFF1B263B),
       appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
       body: Center(
         child: SingleChildScrollView(
@@ -88,13 +91,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 30.0),
             child: Column(
               children: [
-                const Text(
-                  'Sürücü Kaydı',
-                  style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold),
+                Text(
+                  _isCompany ? 'Şirket / İş Veren Kaydı' : 'Sürücü Kaydı',
+                  style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 30),
+                const SizedBox(height: 20),
 
-                // Kayıt Formu (Beyaz Kart)
+                // --- ROL SEÇİMİ (TOGGLE) ---
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _roleOption("Şoför", Icons.local_shipping, !_isCompany),
+                      ),
+                      Expanded(
+                        child: _roleOption("Şirket", Icons.business, _isCompany),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 25),
+
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -103,6 +124,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   child: Column(
                     children: [
+                      // Eğer şirket seçiliyse en üstte şirket adı çıksın
+                      if (_isCompany) ...[
+                        _buildField(_companyNameController, 'Şirket / Firma Adı', Icons.apartment),
+                        const Divider(),
+                      ],
                       _buildField(_firstNameController, 'Adınız', Icons.person_outline),
                       const Divider(),
                       _buildField(_lastNameController, 'Soyadınız', Icons.person_outline),
@@ -117,14 +143,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 30),
 
-                // Kayıt Butonu
                 SizedBox(
                   width: double.infinity,
                   height: 55,
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _register,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFF3722C), // Turuncu
+                      backgroundColor: const Color(0xFFF3722C),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     child: _isLoading 
@@ -141,7 +166,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // Yardımcı input tasarım fonksiyonu
+  // Rol seçimi için küçük buton tasarım fonksiyonu
+  Widget _roleOption(String title, IconData icon, bool isSelected) {
+    return GestureDetector(
+      onTap: () => setState(() => _isCompany = (title == "Şirket")),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFF3722C) : Colors.transparent,
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: isSelected ? Colors.white : Colors.grey, size: 20),
+            const SizedBox(width: 8),
+            Text(title, style: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildField(TextEditingController controller, String hint, IconData icon, {bool isPass = false, bool isPhone = false}) {
     return TextField(
       controller: controller,

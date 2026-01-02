@@ -1,154 +1,180 @@
 import 'package:flutter/material.dart';
-import '../data/mock_jobs.dart'; // Verileri buradan çekiyoruz
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/firebase_service.dart';
+import 'post_job_screen.dart';
+import 'offers_list_screen.dart'; // Teklifler sayfasını içeri aktardık
 
-class MyJobsScreen extends StatelessWidget {
+class MyJobsScreen extends StatefulWidget {
   const MyJobsScreen({super.key});
 
   @override
+  State<MyJobsScreen> createState() => _MyJobsScreenState();
+}
+
+class _MyJobsScreenState extends State<MyJobsScreen> {
+  final FirebaseService _firebaseService = FirebaseService();
+  final String _currentUid = FirebaseAuth.instance.currentUser?.uid ?? "";
+
+  @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3, // Üç sekme: Aktif, Devam Eden, Tamamlanan
-      child: Scaffold(
-        appBar: AppBar(
-          backgroundColor: const Color(0xFF1B263B),
-          title: const Text(
-            'İşlerim / Tekliflerim',
-            style: TextStyle(color: Colors.white),
-          ),
-          bottom: const TabBar(
-            indicatorColor: Color(0xFFF3722C), // Tirigo Turuncusu
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.grey,
-            tabs: [
-              Tab(text: 'Tekliflerim'),
-              Tab(text: 'Yoldakiler'),
-              Tab(text: 'Geçmiş'),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            _buildJobTabList('Teklif'), // Henüz onay bekleyen teklifler
-            _buildJobTabList('Yolda'), // Taşıma aşamasında olanlar
-            _buildJobTabList('Geçmiş'), // Tamamlanan işler
-          ],
-        ),
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
+      appBar: AppBar(
+        title: const Text("İlanlarım ve İşlerim", 
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFF1B263B),
+        actions: [
+          IconButton(
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PostJobScreen())),
+            icon: const Icon(Icons.add_box_rounded, color: Color(0xFFF3722C), size: 30),
+          )
+        ],
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _firebaseService.kullaniciIlanlariniGetir(_currentUid),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: Color(0xFFF3722C)));
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return _buildEmptyState();
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(15),
+            itemCount: snapshot.data!.docs.length,
+            itemBuilder: (context, index) {
+              var jobDoc = snapshot.data!.docs[index];
+              var jobData = jobDoc.data() as Map<String, dynamic>;
+              
+              return _buildJobCard(jobDoc.id, jobData);
+            },
+          );
+        },
       ),
     );
   }
 
-  Widget _buildJobTabList(String type) {
-    // Şimdilik mock veriyi kullanıyoruz, gerçekte burası filtrelenecek
-    return ListView.builder(
-      padding: const EdgeInsets.all(12),
-      itemCount: dummyJobs.length,
-      itemBuilder: (context, index) {
-        final job = dummyJobs[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
-          ),
-          elevation: 3,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
+  Widget _buildJobCard(String jobId, Map<String, dynamic> data) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+      ),
+      child: Column(
+        children: [
+          ListTile(
+            contentPadding: const EdgeInsets.all(15),
+            title: Text("${data['origin']} ➔ ${data['destination']}", 
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '${job.origin} ➔ ${job.destination}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    _statusBadge(type),
-                  ],
+                const SizedBox(height: 5),
+                Text("Yük: ${data['loadType']} | ${data['weight']}"),
+                const SizedBox(height: 5),
+                Text("Fiyat: ${data['price']} ₺", 
+                  style: const TextStyle(color: Color(0xFFF3722C), fontWeight: FontWeight.bold)),
+              ],
+            ),
+            trailing: _buildStatusBadge(data['status'] ?? 'open'),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // --- TEKLİF SAYISINI GÖSTEREN VE SAYFAYA GİDEN BUTON ---
+                StreamBuilder<QuerySnapshot>(
+                  stream: _firebaseService.ilanaGelenTeklifleriGetir(jobId),
+                  builder: (context, offerSnapshot) {
+                    int offerCount = offerSnapshot.hasData ? offerSnapshot.data!.docs.length : 0;
+                    return TextButton.icon(
+                      onPressed: () {
+                        // BURASI GÜNCELLENDİ: Teklifler Listesine Yönlendirme
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => OffersListScreen(
+                              jobId: jobId,
+                              jobTitle: "${data['origin']} - ${data['destination']}",
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.local_offer_outlined, size: 18, color: Colors.blueGrey),
+                      label: Text("$offerCount Teklif Geldi", 
+                        style: const TextStyle(color: Colors.blueGrey, fontWeight: FontWeight.bold)),
+                    );
+                  },
                 ),
-                const Divider(height: 20),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.inventory_2_outlined,
-                      size: 18,
-                      color: Colors.grey,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(job.loadType),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Teklif: ${job.price.toInt()} ₺',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blueGrey,
-                      ),
-                    ),
-                    if (type == 'Teklif')
-                      TextButton(
-                        onPressed: () {},
-                        child: const Text(
-                          'Geri Çek',
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ),
-                    if (type == 'Yolda')
-                      ElevatedButton(
-                        onPressed: () {},
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                        ),
-                        child: const Text(
-                          'Teslim Et',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                  ],
+                IconButton(
+                  onPressed: () => _confirmDelete(jobId),
+                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
                 ),
               ],
             ),
-          ),
-        );
-      },
+          )
+        ],
+      ),
     );
   }
 
-  // Durum etiketleri için küçük yardımcı fonksiyon
-  Widget _statusBadge(String type) {
-    Color color;
-    String text;
-    if (type == 'Teklif') {
-      color = Colors.orange;
-      text = 'Beklemede';
-    } else if (type == 'Yolda') {
-      color = Colors.blue;
-      text = 'Yük Taşıyor';
-    } else {
-      color = Colors.green;
-      text = 'Tamamlandı';
-    }
-
+  Widget _buildStatusBadge(String status) {
+    bool isOpen = status.toLowerCase() == 'open' || status == 'Açık';
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color),
+        color: isOpen ? Colors.green.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-        ),
+        isOpen ? "Aktif" : "Kapalı",
+        style: TextStyle(color: isOpen ? Colors.green : Colors.grey, fontSize: 12, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.assignment_late_outlined, size: 80, color: Colors.grey[300]),
+          const SizedBox(height: 20),
+          const Text("Henüz yayınlanmış bir ilanınız yok.", style: TextStyle(fontSize: 16, color: Colors.grey)),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PostJobScreen())),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF3722C)),
+            child: const Text("Hemen İlan Yayınla", style: TextStyle(color: Colors.white)),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _confirmDelete(String jobId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("İlanı Sil"),
+        content: const Text("Bu ilanı silmek istediğinize emin misiniz? Bu işlem geri alınamaz."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Vazgeç")),
+          TextButton(
+            onPressed: () {
+              _firebaseService.ilanSil(jobId);
+              Navigator.pop(context);
+            }, 
+            child: const Text("Sil", style: TextStyle(color: Colors.red))
+          ),
+        ],
       ),
     );
   }

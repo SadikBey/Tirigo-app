@@ -48,7 +48,10 @@ class _HomeScreenState extends State<HomeScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 10),
             child: GestureDetector(
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PostJobScreen())),
+              onTap: () => Navigator.push(
+                context, 
+                MaterialPageRoute(builder: (context) => const PostJobScreen())
+              ),
               child: Container(
                 padding: const EdgeInsets.all(5),
                 decoration: const BoxDecoration(color: Colors.black38, shape: BoxShape.circle),
@@ -60,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.notifications_none, color: Colors.white),
             onPressed: () {},
           ),
-          // Profil Avatarı (Dinamik)
+          // Profil Avatarı
           Padding(
             padding: const EdgeInsets.only(right: 15),
             child: CircleAvatar(
@@ -68,8 +71,8 @@ class _HomeScreenState extends State<HomeScreen> {
               backgroundColor: const Color(0xFFF3722C),
               backgroundImage: _userPhotoUrl != null ? NetworkImage(_userPhotoUrl!) : null,
               child: _userPhotoUrl == null 
-                ? const Icon(Icons.person, size: 20, color: Colors.white) 
-                : null,
+                  ? const Icon(Icons.person, size: 20, color: Colors.white) 
+                  : null,
             ),
           ),
         ],
@@ -78,17 +81,22 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           _buildTopSearchArea(),
           
-          // --- FIREBASE STREAMBUILDER ---
+          // --- CANLI FIREBASE VERİ AKIŞI ---
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              // Firestore'daki 'jobs' koleksiyonunu dinle
-              // Sadece 'status'u open (açık) olanları getir
+              // Sadece 'open' olanları ve en yeni eklenenleri getirir
               stream: FirebaseFirestore.instance
                   .collection('jobs')
                   .where('status', isEqualTo: 'open')
                   .orderBy('createdAt', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
+                // Hata Kontrolü (Index hatası olursa burada yazar)
+                if (snapshot.hasError) {
+                  print("Hata: ${snapshot.error}");
+                  return Center(child: Text("Yükler getirilemedi. Lütfen tekrar deneyin."));
+                }
+
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator(color: Color(0xFFF3722C)));
                 }
@@ -104,10 +112,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     var doc = snapshot.data!.docs[index];
                     var jobData = doc.data() as Map<String, dynamic>;
                     
-                    // Firestore verisini JobModel'e dönüştür
-                    JobModel job = JobModel.fromMap(jobData, doc.id);
-
-                    return _buildJobCard(context, job);
+                    try {
+                      // Firestore verisini Model'e çeviriyoruz
+                      JobModel job = JobModel.fromMap(jobData, doc.id);
+                      return _buildJobCard(context, job);
+                    } catch (e) {
+                      print("Dönüştürme Hatası: $e");
+                      return const SizedBox.shrink(); // Hatalı veriyi atla
+                    }
                   },
                 );
               },
@@ -131,7 +143,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Arama ve Filtreleme Alanı (Görsel Tasarımı Korudum)
   Widget _buildTopSearchArea() {
     return Container(
       padding: const EdgeInsets.all(15),
@@ -175,10 +186,17 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // İlan Kartı Tasarımı
   Widget _buildJobCard(BuildContext context, JobModel job) {
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => JobDetailsScreen(job: job))),
+      onTap: () => Navigator.push(
+  context, 
+  MaterialPageRoute(
+    builder: (context) => JobDetailsScreen(
+      jobData: job.toMap(), // Model nesnesini Map'e çevirip gönderiyoruz
+      jobId: job.id,        // İlanın ID'sini ayrıca gönderiyoruz
+    ),
+  ),
+),
       child: Card(
         margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
@@ -192,16 +210,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.location_on, color: Color(0xFFF3722C), size: 20),
-                          const SizedBox(width: 5),
-                          Text(job.origin, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          const Icon(Icons.arrow_right_alt, color: Colors.grey),
-                          Text(job.destination, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                        ],
+                      Expanded(
+                        child: Row(
+                          children: [
+                            const Icon(Icons.location_on, color: Color(0xFFF3722C), size: 20),
+                            const SizedBox(width: 5),
+                            Text(job.origin, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                            const Icon(Icons.arrow_right_alt, color: Colors.grey),
+                            Text(job.destination, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                          ],
+                        ),
                       ),
-                      Text('${job.price.toInt()} ₺', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 18)),
+                      Text('${job.price.toInt()} ₺', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 17)),
                     ],
                   ),
                   const Divider(height: 25),
@@ -209,7 +229,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       const Icon(Icons.inventory_2_outlined, size: 18, color: Colors.blueGrey),
                       const SizedBox(width: 8),
-                      Text('${job.loadType} | ${job.weight}', style: const TextStyle(color: Colors.black87)),
+                      Text('${job.loadType} | ${job.weight}', style: const TextStyle(color: Colors.black87, fontSize: 13)),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -217,7 +237,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       const Icon(Icons.local_shipping_outlined, size: 18, color: Colors.blueGrey),
                       const SizedBox(width: 8),
-                      Text(job.truckType, style: const TextStyle(color: Colors.black87)),
+                      Text(job.truckType, style: const TextStyle(color: Colors.black87, fontSize: 13)),
                     ],
                   ),
                 ],
@@ -232,8 +252,8 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(job.companyName, style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
-                  const Text('Detayları Gör >', style: TextStyle(color: Color(0xFF1B263B), fontWeight: FontWeight.bold)),
+                  Text(job.companyName, style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w500, fontSize: 12)),
+                  const Text('Detayları Gör >', style: TextStyle(color: Color(0xFF1B263B), fontWeight: FontWeight.bold, fontSize: 12)),
                 ],
               ),
             ),

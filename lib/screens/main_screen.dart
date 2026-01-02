@@ -5,22 +5,32 @@ import 'messages_screen.dart';
 import 'profile_screen.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  // Dışarıdan hangi sekmenin açılacağını belirlemek için index alıyoruz
+  final int initialIndex; 
+
+  const MainScreen({super.key, this.initialIndex = 0}); // Varsayılan değer 0 (Yük Bul)
 
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
-  // Seçili olan sekmenin indeksi (0: Ana Sayfa)
-  int _selectedIndex = 0;
+  // Seçili olan sekmenin indeksi
+  late int _selectedIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    // Uygulama açıldığında veya yönlendirme yapıldığında gelen indexi ata
+    _selectedIndex = widget.initialIndex;
+  }
 
   // Navigasyon çubuğundaki her bir seçenek için görüntülenecek sayfalar
   final List<Widget> _pages = [
-    const HomeScreen(),      // Yük Akışı (Feed)
-    const MyJobsScreen(),    // İşlerim / Tekliflerim
-    const MessagesScreen(),  // Mesajlaşma
-    const ProfileScreen(),   // Profil ve Ayarlar
+    const HomeScreen(),      // Yük Akışı (Feed) - İndeks 0
+    const MyJobsScreen(),    // İşlerim / İlanlarım - İndeks 1
+    const MessagesScreen(),  // Mesajlaşma - İndeks 2
+    const ProfileScreen(),   // Profil ve Ayarlar - İndeks 3
   ];
 
   // Sekme değiştirme fonksiyonu
@@ -33,7 +43,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // IndexedStack kullanarak sayfalar arası geçişte verilerin kaybolmasını (scroll pozisyonu vb.) önlüyoruz
+      // IndexedStack kullanarak sayfalar arası geçişte verilerin kaybolmasını önlüyoruz
       body: IndexedStack(
         index: _selectedIndex,
         children: _pages,
@@ -41,9 +51,9 @@ class _MainScreenState extends State<MainScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed, // 4 ikon olduğu için sabit tip
+        type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
-        selectedItemColor: const Color(0xFFF3722C), // Tasarımdaki Tirigo Turuncusu
+        selectedItemColor: const Color(0xFFF3722C), // Tirigo Turuncusu
         unselectedItemColor: Colors.blueGrey,
         selectedLabelStyle: const TextStyle(
           fontWeight: FontWeight.bold, 
@@ -69,11 +79,11 @@ class _MainScreenState extends State<MainScreen> {
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline), 
-            activeIcon: Icon(Icons.abc_outlined),
+            activeIcon: Icon(Icons.person), // İkon düzeltildi
             label: 'Profil',
           ),
         ],
       ),
     );
   }
-}      
+}

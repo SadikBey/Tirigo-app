@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'login_screen.dart'; // Giriş ekranına yönlendirme için eklendi
 import 'personal_info_screen.dart';
 import 'payment_settings_screen.dart';
 import 'comments_screen.dart';
@@ -15,7 +16,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   String _fullName = "Yükleniyor...";
-  String _userRole = "Sürücü";
+  String _userRole = "Yükleniyor...";
   double _rating = 0.0;
   bool _isLoading = true;
 
@@ -38,13 +39,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final data = userDoc.data() as Map<String, dynamic>;
           setState(() {
             _fullName = "${data['firstName']} ${data['lastName']}";
+            // Rolü Türkçeleştirelim
+            String role = data['role'] ?? 'driver';
+            _userRole = role == 'company' ? "Şirket Sahibi" : "Sürücü";
             _rating = data.containsKey('rating') ? (data['rating'] as num).toDouble() : 4.8;
             _isLoading = false;
           });
         }
       }
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // --- ASIL ÇIKIŞ YAPMA FONKSİYONU ---
+  Future<void> _handleLogout() async {
+    try {
+      await FirebaseAuth.instance.signOut();
+      if (mounted) {
+        // Tüm sayfaları temizleyerek Login ekranına gönderir
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Çıkış hatası: $e")),
+        );
+      }
     }
   }
 
@@ -84,8 +109,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const Icon(Icons.star_rounded, color: Colors.amber, size: 24),
                     const SizedBox(width: 5),
                     Text(_rating.toString(), style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(width: 10),
-                    Text(_userRole, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                    const SizedBox(width: 15),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(_userRole, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                    ),
                   ],
                 ),
               ],
@@ -154,13 +186,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Çıkış Yap"),
-        content: const Text("Hesabınızdan çıkış yapmak üzeresiniz."),
+        content: const Text("Hesabınızdan çıkış yapmak üzeresiniz. Emin misiniz?"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("İptal")),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Vazgeç")),
           ElevatedButton(
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-              if (mounted) Navigator.pop(context);
+            onPressed: () {
+              Navigator.pop(context); // Dialog'u kapat
+              _handleLogout(); // Çıkış işlemini başlat
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text("Çıkış Yap", style: TextStyle(color: Colors.white)),
