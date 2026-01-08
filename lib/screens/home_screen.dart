@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/job_model.dart';
 import 'job_details_screen.dart';
 import 'post_job_screen.dart';
+import 'notifications_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,22 +16,27 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _auth = FirebaseAuth.instance;
   String? _userPhotoUrl;
+  String _userRole = 'driver'; // Varsayılan rol
 
   @override
   void initState() {
     super.initState();
-    _loadUserProfilePhoto();
+    _loadUserData();
   }
 
-  // Profil fotoğrafını Firestore'dan çekme
-  Future<void> _loadUserProfilePhoto() async {
+  Future<void> _loadUserData() async {
     final user = _auth.currentUser;
     if (user != null) {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      if (doc.exists) {
-        setState(() {
-          _userPhotoUrl = doc.data()?['photoUrl'];
-        });
+      try {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        if (doc.exists && mounted) {
+          setState(() {
+            _userPhotoUrl = doc.data()?['photoUrl'];
+            _userRole = doc.data()?['role'] ?? 'driver';
+          });
+        }
+      } catch (e) {
+        print("Kullanıcı verisi yükleme hatası: $e");
       }
     }
   }
@@ -40,61 +46,66 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F4F4),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1B263B),
-        elevation: 0,
-        title: Image.asset('assets/images/tirigo_yazi_logo.png', height: 35),
-        actions: [
-          // İlan Ekleme Butonu
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: GestureDetector(
-              onTap: () => Navigator.push(
-                context, 
-                MaterialPageRoute(builder: (context) => const PostJobScreen())
-              ),
-              child: Container(
-                padding: const EdgeInsets.all(5),
-                decoration: const BoxDecoration(color: Colors.black38, shape: BoxShape.circle),
-                child: const Icon(Icons.add, color: Colors.white, size: 22),
-              ),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.notifications_none, color: Colors.white),
-            onPressed: () {},
-          ),
-          // Profil Avatarı
-          Padding(
-            padding: const EdgeInsets.only(right: 15),
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: const Color(0xFFF3722C),
-              backgroundImage: _userPhotoUrl != null ? NetworkImage(_userPhotoUrl!) : null,
-              child: _userPhotoUrl == null 
-                  ? const Icon(Icons.person, size: 20, color: Colors.white) 
-                  : null,
-            ),
-          ),
-        ],
+  backgroundColor: const Color(0xFF1B263B),
+  elevation: 0,
+  title: Image.asset('assets/images/tirigo_yazi_logo.png', height: 35),
+  actions: [
+    // Şirketler için ilan ekleme butonu
+    if (_userRole == 'company')
+      IconButton(
+        icon: const Icon(Icons.add_circle_outline, color: Colors.white),
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const PostJobScreen()),
+        ),
       ),
+      
+    // BİLDİRİM ZİLİ GÜNCELLEMESİ:
+    IconButton(
+      icon: const Icon(Icons.notifications_none, color: Colors.white),
+      onPressed: () {
+        // Zil ikonuna basıldığında bildirimler sayfasına gider
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+        );
+      },
+    ),
+
+    Padding(
+      padding: const EdgeInsets.only(right: 15),
+      child: CircleAvatar(
+        radius: 18,
+        backgroundColor: const Color(0xFFF3722C),
+        backgroundImage: _userPhotoUrl != null ? NetworkImage(_userPhotoUrl!) : null,
+        child: _userPhotoUrl == null ? const Icon(Icons.person, size: 20, color: Colors.white) : null,
+      ),
+    ),
+  ],
+),
       body: Column(
         children: [
           _buildTopSearchArea(),
-          
-          // --- CANLI FIREBASE VERİ AKIŞI ---
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              // Sadece 'open' olanları ve en yeni eklenenleri getirir
+              // GÜVENLİ SORGU: Index hatasını önlemek için orderBy'ı şimdilik kaldırdık
               stream: FirebaseFirestore.instance
-                  .collection('jobs')
-                  .where('status', isEqualTo: 'open')
-                  .orderBy('createdAt', descending: true)
-                  .snapshots(),
+    .collection('jobs')
+    .where('status', isEqualTo: 'open') // Önce filtre
+    .snapshots(),
               builder: (context, snapshot) {
-                // Hata Kontrolü (Index hatası olursa burada yazar)
+                // HATA VARSA EKRANA YAZDIR (Kırmızı metin olarak)
                 if (snapshot.hasError) {
-                  print("Hata: ${snapshot.error}");
-                  return Center(child: Text("Yükler getirilemedi. Lütfen tekrar deneyin."));
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: SelectableText(
+                        "Firestore Hatası: ${snapshot.error}",
+                        style: const TextStyle(color: Colors.red),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
                 }
 
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -113,12 +124,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     var jobData = doc.data() as Map<String, dynamic>;
                     
                     try {
-                      // Firestore verisini Model'e çeviriyoruz
                       JobModel job = JobModel.fromMap(jobData, doc.id);
                       return _buildJobCard(context, job);
                     } catch (e) {
-                      print("Dönüştürme Hatası: $e");
-                      return const SizedBox.shrink(); // Hatalı veriyi atla
+                      return const SizedBox.shrink(); // Hatalı veriyi sessizce atla
                     }
                   },
                 );
@@ -130,6 +139,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // --- UI YARDIMCI METODLARI ---
+
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -138,6 +149,8 @@ class _HomeScreenState extends State<HomeScreen> {
           Icon(Icons.local_shipping_outlined, size: 64, color: Colors.grey[400]),
           const SizedBox(height: 16),
           Text("Şu an aktif ilan bulunmuyor.", style: TextStyle(color: Colors.grey[600])),
+          const SizedBox(height: 8),
+          const Text("İpucu: Veritabanında status='open' olan ilan var mı?", style: TextStyle(fontSize: 10, color: Colors.grey)),
         ],
       ),
     );
@@ -160,43 +173,22 @@ class _HomeScreenState extends State<HomeScreen> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
             ),
           ),
-          const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _filterChip('En Yakın'),
-                _filterChip('Yüksek Fiyat'),
-                _filterChip('Acil Yükler'),
-                _filterChip('Tenteli'),
-              ],
-            ),
-          ),
         ],
       ),
-    );
-  }
-
-  Widget _filterChip(String label) {
-    return Container(
-      margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-      decoration: BoxDecoration(color: Colors.white.withOpacity(0.15), borderRadius: BorderRadius.circular(20)),
-      child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 13)),
     );
   }
 
   Widget _buildJobCard(BuildContext context, JobModel job) {
     return GestureDetector(
       onTap: () => Navigator.push(
-  context, 
-  MaterialPageRoute(
-    builder: (context) => JobDetailsScreen(
-      jobData: job.toMap(), // Model nesnesini Map'e çevirip gönderiyoruz
-      jobId: job.id,        // İlanın ID'sini ayrıca gönderiyoruz
-    ),
-  ),
-),
+        context,
+        MaterialPageRoute(
+          builder: (context) => JobDetailsScreen(
+            jobData: job.toMap(),
+            jobId: job.id,
+          ),
+        ),
+      ),
       child: Card(
         margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
@@ -230,14 +222,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       const Icon(Icons.inventory_2_outlined, size: 18, color: Colors.blueGrey),
                       const SizedBox(width: 8),
                       Text('${job.loadType} | ${job.weight}', style: const TextStyle(color: Colors.black87, fontSize: 13)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(Icons.local_shipping_outlined, size: 18, color: Colors.blueGrey),
-                      const SizedBox(width: 8),
-                      Text(job.truckType, style: const TextStyle(color: Colors.black87, fontSize: 13)),
                     ],
                   ),
                 ],

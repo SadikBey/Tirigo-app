@@ -1,207 +1,240 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/firebase_service.dart';
-import 'chat_detail_screen.dart';
+import 'offers_list_screen.dart'; 
 
-class JobDetailsScreen extends StatelessWidget { // Sınıf adını 's' takısı ile güncelledik
+class JobDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> jobData;
   final String jobId;
 
-  JobDetailsScreen({super.key, required this.jobData, required this.jobId});
+  const JobDetailsScreen({super.key, required this.jobData, required this.jobId});
 
+  @override
+  State<JobDetailsScreen> createState() => _JobDetailsScreenState();
+}
+
+class _JobDetailsScreenState extends State<JobDetailsScreen> {
   final FirebaseService _firebaseService = FirebaseService();
+  final TextEditingController _priceController = TextEditingController();
+  final String _currentUid = FirebaseAuth.instance.currentUser?.uid ?? "";
+  
+  bool _isSending = false;
+  String _driverName = "Şoför";
+  bool _isOwner = false;
+  bool _isLoadingData = true; // Veri yüklenme kontrolü
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialData(); // Verileri garantileyen yeni fonksiyon
+  }
+
+  // EKSİK VERİLERİ VERİTABANINDAN KURTARAN FONKSİYON
+  Future<void> _loadInitialData() async {
+    try {
+      // Eğer userId (şirket ID) eksik gelmişse veritabanından çekelim
+      if (widget.jobData['userId'] == null || widget.jobData['userId'].isEmpty) {
+        DocumentSnapshot doc = await FirebaseFirestore.instance
+            .collection('jobs')
+            .doc(widget.jobId)
+            .get();
+            
+        if (doc.exists) {
+          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+          widget.jobData['userId'] = data['userId']; // Eksik ID'yi tamamladık
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _isOwner = widget.jobData['userId'] == _currentUid;
+          _priceController.text = (widget.jobData['price'] ?? "0").toString();
+          _isLoadingData = false;
+        });
+        _loadDriverName();
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingData = false);
+      debugPrint("Veri yükleme hatası: $e");
+    }
+  }
+
+  Future<void> _loadDriverName() async {
+    if (_isOwner) return; 
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(_currentUid).get();
+      if (doc.exists && mounted) {
+        setState(() {
+          _driverName = doc.data()?['name'] ?? "Anonim Şoför";
+        });
+      }
+    } catch (e) {
+      debugPrint("Kullanıcı adı yüklenemedi: $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingData) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        title: const Text("İlan Detayı", style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF1B263B),
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // --- GÜZERGAH VE FİYAT KARTI ---
-            _buildHeaderCard(),
-            
-            // --- YÜK VE ARAÇ BİLGİLERİ ---
-            _buildDetailSection(),
-
-            // --- ŞİRKET BİLGİSİ ---
-            _buildCompanyCard(),
-            
-            const SizedBox(height: 100), // Butonlar için boşluk
-          ],
-        ),
-      ),
-      // --- ALT AKSİYON BUTONLARI ---
-      bottomSheet: _buildActionButtons(context),
-    );
-  }
-
-  // --- TEKLİF VERME PENCERESİ (MODAL) ---
-  void _showBidSheet(BuildContext context) {
-    final TextEditingController _bidController = TextEditingController();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-      ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-          left: 20, right: 20, top: 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-            const SizedBox(height: 20),
-            const Text("Teklifinizi Girin", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            Text("Önerilen Fiyat: ${jobData['price']} ₺", style: const TextStyle(color: Colors.grey)),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _bidController,
-              keyboardType: TextInputType.number,
-              autofocus: true,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.payments_outlined, color: Color(0xFFF3722C)),
-                hintText: "Örn: 4500",
-                suffixText: "₺",
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+      backgroundColor: const Color(0xFFF8F9FD),
+      body: CustomScrollView(
+        slivers: [
+          _buildSliverAppBar(),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildRouteCard(),
+                  const SizedBox(height: 25),
+                  _buildSectionTitle("Yük Detayları"),
+                  _buildDetailGrid(),
+                  const SizedBox(height: 25),
+                  _buildCompanyInfo(),
+                  const SizedBox(height: 30),
+                  _isOwner ? _buildCompanyAction() : _buildDriverAction(),
+                  const SizedBox(height: 50),
+                ],
               ),
             ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () async {
-                  if (_bidController.text.isNotEmpty) {
-                    double offeredPrice = double.parse(_bidController.text);
-                    await _firebaseService.teklifVer(
-                      jobId: jobId,
-                      origin: jobData['origin'],
-                      destination: jobData['destination'],
-                      offeredPrice: offeredPrice,
-                      driverName: "Şoför", // Burası dinamik yapılabilir
-                    );
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Teklifiniz başarıyla iletildi!")),
-                    );
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1B263B),
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                ),
-                child: const Text("Teklifi Gönder", style: TextStyle(color: Colors.white)),
-              ),
-            ),
-            const SizedBox(height: 30),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeaderCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1B263B),
-        borderRadius: BorderRadius.only(bottomLeft: Radius.circular(30), bottomRight: Radius.circular(30)),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildLocationColumn("Kalkış", jobData['origin']),
-              const Icon(Icons.arrow_forward, color: Color(0xFFF3722C), size: 30),
-              _buildLocationColumn("Varış", jobData['destination']),
-            ],
           ),
-          const SizedBox(height: 20),
-          Text("${jobData['price']} ₺", 
-            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
-          const Text("Önerilen Fiyat", style: TextStyle(color: Colors.white70, fontSize: 14)),
         ],
       ),
     );
   }
 
-  Widget _buildLocationColumn(String label, String city) {
-    return Column(
-      children: [
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-        Text(city, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-      ],
-    );
-  }
+  // --- UI BİLEŞENLERİ ---
 
-  Widget _buildDetailSection() {
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("Yük Bilgileri", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 15),
-          _buildInfoRow(Icons.inventory_2_outlined, "Yük Tipi", jobData['loadType']),
-          _buildInfoRow(Icons.monitor_weight_outlined, "Ağırlık", jobData['weight']),
-          _buildInfoRow(Icons.local_shipping_outlined, "Araç Tipi", jobData['truckType']),
-        ],
+  Widget _buildSliverAppBar() {
+    return SliverAppBar(
+      expandedHeight: 120,
+      pinned: true,
+      backgroundColor: const Color(0xFF1B263B),
+      iconTheme: const IconThemeData(color: Colors.white),
+      flexibleSpace: FlexibleSpaceBar(
+        title: const Text("İlan Detayı", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+        centerTitle: true,
+        background: Container(color: const Color(0xFF1B263B)),
       ),
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String title, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Icon(icon, color: const Color(0xFF1B263B), size: 24),
-          const SizedBox(width: 15),
-          Text("$title: ", style: const TextStyle(color: Colors.grey, fontSize: 16)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCompanyCard() {
+  Widget _buildRouteCard() {
     return Container(
-      margin: const EdgeInsets.all(20),
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 20)],
       ),
       child: Row(
         children: [
-          const CircleAvatar(backgroundColor: Color(0xFFF3722C), child: Icon(Icons.business, color: Colors.white)),
-          const SizedBox(width: 15),
+          Column(
+            children: [
+              const Icon(Icons.radio_button_checked, color: Color(0xFFF3722C), size: 20),
+              Container(width: 2, height: 40, color: Colors.grey[200]),
+              const Icon(Icons.location_on, color: Color(0xFF1B263B), size: 24),
+            ],
+          ),
+          const SizedBox(width: 20),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(jobData['companyName'] ?? "Şirket Bilgisi Yok", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                const Text("Tirigo Onaylı İş Ortağı", style: TextStyle(color: Colors.green, fontSize: 12)),
+                _buildRouteItem("Kalkış Noktası", widget.jobData['origin']),
+                const SizedBox(height: 25),
+                _buildRouteItem("Varış Noktası", widget.jobData['destination']),
               ],
             ),
           ),
-          Row(
+          Text(
+            "${widget.jobData['price']} ₺",
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFFF3722C)),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRouteItem(String label, String? city) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+        Text(city ?? "-", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
+  Widget _buildDetailGrid() {
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      mainAxisSpacing: 15,
+      crossAxisSpacing: 15,
+      childAspectRatio: 2.5,
+      children: [
+        _buildMiniCard(Icons.inventory_2_outlined, "Yük", widget.jobData['loadType']),
+        _buildMiniCard(Icons.fitness_center, "Ağırlık", "${widget.jobData['weight']} kg"),
+        _buildMiniCard(Icons.local_shipping_outlined, "Araç", widget.jobData['truckType']),
+        _buildMiniCard(Icons.calendar_today_outlined, "Durum", widget.jobData['status'] == 'open' ? 'Aktif' : 'Kapalı'),
+      ],
+    );
+  }
+
+  Widget _buildMiniCard(IconData icon, String label, String? value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.grey.withOpacity(0.1)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: const Color(0xFFF3722C)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+                Text(value ?? "-", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompanyInfo() {
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1B263B).withOpacity(0.05),
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            backgroundColor: Color(0xFF1B263B), 
+            child: Icon(Icons.business, color: Colors.white)
+          ),
+          const SizedBox(width: 15),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.star, color: Colors.amber, size: 20),
-              Text(jobData['companyRate']?.toString() ?? "4.8", style: const TextStyle(fontWeight: FontWeight.bold)),
+              const Text("İlan Veren Firma", style: TextStyle(fontSize: 11, color: Colors.grey)),
+              Text(widget.jobData['companyName'] ?? "Tirigo Üyesi", style: const TextStyle(fontWeight: FontWeight.bold)),
             ],
           )
         ],
@@ -209,48 +242,140 @@ class JobDetailsScreen extends StatelessWidget { // Sınıf adını 's' takısı
     );
   }
 
-  Widget _buildActionButtons(BuildContext context) {
+  Widget _buildCompanyAction() {
+    return Column(
+      children: [
+        const Text("Bu ilan size ait. Gelen teklifleri yönetebilirsiniz.", style: TextStyle(color: Colors.grey, fontSize: 13)),
+        const SizedBox(height: 15),
+        SizedBox(
+          width: double.infinity,
+          height: 60,
+          child: ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => OffersListScreen(
+                    jobId: widget.jobId,
+                    jobTitle: "${widget.jobData['origin']} - ${widget.jobData['destination']}",
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.list_alt_rounded, color: Colors.white),
+            label: const Text("GELEN TEKLİFLERİ GÖR", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B263B), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18))),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDriverAction() {
     return Container(
       padding: const EdgeInsets.all(20),
-      height: 90,
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, -5))],
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [BoxShadow(color: const Color(0xFFF3722C).withOpacity(0.1), blurRadius: 30, offset: const Offset(0, 10))],
       ),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            flex: 1,
-            child: OutlinedButton(
-              onPressed: () async {
-                String chatId = await _firebaseService.sohbetBaslat(jobData['userId'], jobData['companyName']);
-                if (context.mounted) {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => ChatDetailScreen(chatId: chatId, otherUserName: jobData['companyName'])));
-                }
-              },
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFF1B263B)),
-                padding: const EdgeInsets.symmetric(vertical: 15),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text("Soru Sor", style: TextStyle(color: Color(0xFF1B263B), fontWeight: FontWeight.bold)),
+          const Text("Teklifinizi Belirleyin", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 15),
+          TextField(
+            controller: _priceController,
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFFF3722C)),
+            decoration: InputDecoration(
+              suffixText: "₺",
+              filled: true,
+              fillColor: Colors.grey[50],
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
             ),
           ),
-          const SizedBox(width: 15),
-          Expanded(
-            flex: 2,
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 55,
             child: ElevatedButton(
-              onPressed: () => _showBidSheet(context), // BURASI GÜNCELLENDİ
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFF3722C),
-                padding: const EdgeInsets.symmetric(vertical: 15),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text("Teklif Ver", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+              onPressed: _isSending ? null : _handleSendOffer,
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF3722C), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
+              child: _isSending ? const CircularProgressIndicator(color: Colors.white) : const Text("TEKLİFİ GÖNDER", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _handleSendOffer() async {
+    final String? ownerId = widget.jobData['userId']; 
+    
+    if (ownerId == null || ownerId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Hata: İlan sahibinin ID'si hala bulunamadı!")),
+      );
+      return;
+    }
+
+    setState(() => _isSending = true);
+    
+    try {
+      double offerPrice = double.tryParse(_priceController.text.replaceAll(',', '.')) ?? 0.0;
+      
+      await _firebaseService.teklifVer(
+        jobId: widget.jobId,
+        offerPrice: offerPrice,
+        driverName: _driverName,
+        companyId: ownerId, 
+        jobTitle: "${widget.jobData['origin']} -> ${widget.jobData['destination']}",
+      );
+      
+      if (!mounted) return;
+      _showSuccessDialog();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Hata: $e")));
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  void _showSuccessDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.check_circle, color: Colors.green, size: 80),
+            const SizedBox(height: 20),
+            const Text("Teklif İletildi!", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            const Text("Şirket sahibi ile otomatik sohbet başlatıldı.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 25),
+            TextButton(
+              onPressed: () { 
+                Navigator.pop(context); 
+                Navigator.pop(context); 
+              },
+              child: const Text("TAMAM", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 15),
+      child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1B263B))),
     );
   }
 }

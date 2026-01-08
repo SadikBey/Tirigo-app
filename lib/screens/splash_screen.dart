@@ -26,7 +26,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1B263B), // Lacivert arka plan
+      backgroundColor: const Color(0xFFCED4DA), // Lacivert arka plan
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

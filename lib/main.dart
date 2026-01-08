@@ -62,14 +62,14 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1B263B), // Arka plan koyu mavi
+      backgroundColor: const Color(0xFFF0F4F8), // Arka plan koyu mavi
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // Logonun assets klasöründe ve pubspec.yaml'da tanımlı olduğundan emin ol
             Image.asset(
-              'assets/images/Trigo_logo2.png', 
+              'assets/images/Trigo_logo.png', 
               width: 250,
               errorBuilder: (context, error, stackTrace) {
                 // Eğer resim yüklenemezse ikon gösterir (Hata almamak için)

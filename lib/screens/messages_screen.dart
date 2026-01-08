@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:intl/intl.dart';
 import 'chat_detail_screen.dart';
+import 'user_profile_screen.dart'; // Import eklendi
 
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({super.key});
@@ -14,8 +16,20 @@ class _MessagesScreenState extends State<MessagesScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  String _formatDateTime(Timestamp? timestamp) {
+    if (timestamp == null) return "";
+    DateTime date = timestamp.toDate();
+    DateTime now = DateTime.now();
+    if (now.day == date.day && now.month == date.month && now.year == date.year) {
+      return DateFormat('HH:mm').format(date);
+    }
+    return DateFormat('dd.MM.yyyy').format(date);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final String currentUserId = _auth.currentUser?.uid ?? "";
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
@@ -24,26 +38,25 @@ class _MessagesScreenState extends State<MessagesScreen> {
         elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        // Sadece kullanıcının dahil olduğu sohbetleri getiriyoruz
         stream: _firestore
             .collection('chats')
-            .where('participants', arrayContains: _auth.currentUser?.uid)
+            .where('participants', arrayContains: currentUserId)
             .snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Color(0xFFF3722C)));
-          }
-
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return _buildEmptyState();
-          }
+          if (snapshot.hasError) return Center(child: Text("Hata: ${snapshot.error}"));
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text("Henüz mesajınız yok"));
 
           return ListView.builder(
             padding: const EdgeInsets.symmetric(vertical: 10),
             itemCount: snapshot.data!.docs.length,
             itemBuilder: (context, index) {
-              var chatData = snapshot.data!.docs[index].data() as Map<String, dynamic>;
-              return _buildChatTile(chatData, snapshot.data!.docs[index].id);
+              var doc = snapshot.data!.docs[index];
+              var chatData = doc.data() as Map<String, dynamic>;
+              List participants = chatData['participants'] ?? [];
+              String otherUserId = participants.firstWhere((id) => id != currentUserId, orElse: () => "");
+              
+              return _buildChatTile(chatData, doc.id, otherUserId);
             },
           );
         },
@@ -51,72 +64,60 @@ class _MessagesScreenState extends State<MessagesScreen> {
     );
   }
 
-  // Sohbet Satırı Tasarımı
-  Widget _buildChatTile(Map<String, dynamic> data, String chatId) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-        leading: CircleAvatar(
-          backgroundColor: const Color(0xFFF3722C),
-          child: const Icon(Icons.person, color: Colors.white),
-        ),
-        title: Text(
-          data['otherUserName'] ?? "Bilinmeyen Kullanıcı",
-          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B263B)),
-        ),
-        subtitle: Text(
-          data['lastMessage'] ?? "Mesaj bulunmuyor...",
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
-            const SizedBox(height: 5),
-            Text(
-              "12:45", // Buraya timestamp gelecek
-              style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-            ),
-          ],
-        ),
-        onTap: () {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => ChatDetailScreen(
-        chatId: chatId,
-        otherUserName: data['otherUserName'] ?? "Kullanıcı",
-      ),
-    ),
-  );
-},
-      ),
-    );
-  }
+  Widget _buildChatTile(Map<String, dynamic> data, String chatId, String otherUserId) {
+  return FutureBuilder<DocumentSnapshot>(
+    future: _firestore.collection('users').doc(otherUserId).get(),
+    builder: (context, userSnap) {
+      String name = "Yükleniyor...";
+      
+      if (userSnap.hasData && userSnap.data!.exists) {
+        var userData = userSnap.data!.data() as Map<String, dynamic>;
+        
+        // --- GÜNCELLEME: firstName ve lastName birleştiriliyor ---
+        String fName = userData['firstName'] ?? "";
+        String lName = userData['lastName'] ?? "";
+        name = "$fName $lName".trim();
+        
+        // Eğer isim soyisim boşsa e-posta veya varsayılan değer
+        if (name.isEmpty) {
+          name = userData['email']?.split('@')[0] ?? "Kullanıcı";
+        }
+      }
 
-  // Mesaj Yoksa Gösterilecek Ekran
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.chat_bubble_outline, size: 80, color: Colors.grey[400]),
-          const SizedBox(height: 20),
-          Text(
-            "Henüz mesajınız yok",
-            style: TextStyle(fontSize: 18, color: Colors.grey[600], fontWeight: FontWeight.w500),
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+        ),
+        child: ListTile(
+          leading: GestureDetector(
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(
+                builder: (c) => UserProfileScreen(userId: otherUserId)
+              ));
+            },
+            child: const CircleAvatar(
+              backgroundColor: Color(0xFFF3722C), 
+              child: Icon(Icons.person, color: Colors.white)
+            ),
           ),
-          const SizedBox(height: 10),
-          const Text("İlanlar üzerinden teklif vererek\niletişime geçebilirsiniz.", textAlign: TextAlign.center),
-        ],
-      ),
-    );
-  }
+          title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+          subtitle: Text(data['lastMessage'] ?? "Mesaj bulunmuyor...", maxLines: 1, overflow: TextOverflow.ellipsis),
+          trailing: Text(_formatDateTime(data['updatedAt'] as Timestamp?), style: const TextStyle(fontSize: 10)),
+          onTap: () {
+            Navigator.push(context, MaterialPageRoute(
+              builder: (context) => ChatDetailScreen(
+                chatId: chatId, 
+                receiverName: name, 
+                receiverId: otherUserId
+              )
+            ));
+          },
+        ),
+      );
+    }
+  );
+}
 }
