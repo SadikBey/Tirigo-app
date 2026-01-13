@@ -3,7 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'chat_detail_screen.dart';
-import 'user_profile_screen.dart'; // Import eklendi
+// DEĞİŞİKLİK: Eski user_profile_screen.dart yerine profile_screen.dart import edildi
+import 'profile_screen.dart'; 
 
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({super.key});
@@ -65,59 +66,57 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   Widget _buildChatTile(Map<String, dynamic> data, String chatId, String otherUserId) {
-  return FutureBuilder<DocumentSnapshot>(
-    future: _firestore.collection('users').doc(otherUserId).get(),
-    builder: (context, userSnap) {
-      String name = "Yükleniyor...";
-      
-      if (userSnap.hasData && userSnap.data!.exists) {
-        var userData = userSnap.data!.data() as Map<String, dynamic>;
+    return FutureBuilder<DocumentSnapshot>(
+      future: _firestore.collection('users').doc(otherUserId).get(),
+      builder: (context, userSnap) {
+        String name = "Yükleniyor...";
         
-        // --- GÜNCELLEME: firstName ve lastName birleştiriliyor ---
-        String fName = userData['firstName'] ?? "";
-        String lName = userData['lastName'] ?? "";
-        name = "$fName $lName".trim();
-        
-        // Eğer isim soyisim boşsa e-posta veya varsayılan değer
-        if (name.isEmpty) {
-          name = userData['email']?.split('@')[0] ?? "Kullanıcı";
+        if (userSnap.hasData && userSnap.data!.exists) {
+          var userData = userSnap.data!.data() as Map<String, dynamic>;
+          String fName = userData['firstName'] ?? "";
+          String lName = userData['lastName'] ?? "";
+          name = "$fName $lName".trim();
+          
+          if (name.isEmpty) {
+            name = userData['email']?.split('@')[0] ?? "Kullanıcı";
+          }
         }
-      }
 
-      return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
-        ),
-        child: ListTile(
-          leading: GestureDetector(
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+          ),
+          child: ListTile(
+            leading: GestureDetector(
+              onTap: () {
+                // GÜNCELLEME: UserProfileScreen yerine ProfileScreen çağırılıyor
+                Navigator.push(context, MaterialPageRoute(
+                  builder: (c) => ProfileScreen(userId: otherUserId)
+                ));
+              },
+              child: const CircleAvatar(
+                backgroundColor: Color(0xFFF3722C), 
+                child: Icon(Icons.person, color: Colors.white)
+              ),
+            ),
+            title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text(data['lastMessage'] ?? "Mesaj bulunmuyor...", maxLines: 1, overflow: TextOverflow.ellipsis),
+            trailing: Text(_formatDateTime(data['updatedAt'] as Timestamp?), style: const TextStyle(fontSize: 10)),
             onTap: () {
               Navigator.push(context, MaterialPageRoute(
-                builder: (c) => UserProfileScreen(userId: otherUserId)
+                builder: (context) => ChatDetailScreen(
+                  chatId: chatId, 
+                  receiverName: name, 
+                  receiverId: otherUserId
+                )
               ));
             },
-            child: const CircleAvatar(
-              backgroundColor: Color(0xFFF3722C), 
-              child: Icon(Icons.person, color: Colors.white)
-            ),
           ),
-          title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-          subtitle: Text(data['lastMessage'] ?? "Mesaj bulunmuyor...", maxLines: 1, overflow: TextOverflow.ellipsis),
-          trailing: Text(_formatDateTime(data['updatedAt'] as Timestamp?), style: const TextStyle(fontSize: 10)),
-          onTap: () {
-            Navigator.push(context, MaterialPageRoute(
-              builder: (context) => ChatDetailScreen(
-                chatId: chatId, 
-                receiverName: name, 
-                receiverId: otherUserId
-              )
-            ));
-          },
-        ),
-      );
-    }
-  );
-}
+        );
+      }
+    );
+  }
 }

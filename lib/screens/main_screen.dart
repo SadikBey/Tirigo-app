@@ -5,60 +5,49 @@ import 'messages_screen.dart';
 import 'profile_screen.dart';
 
 class MainScreen extends StatefulWidget {
-  // Dışarıdan hangi sekmenin açılacağını belirlemek için index alıyoruz
   final int initialIndex; 
-
-  const MainScreen({super.key, this.initialIndex = 0}); // Varsayılan değer 0 (Yük Bul)
+  const MainScreen({super.key, this.initialIndex = 0});
 
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
-  // Seçili olan sekmenin indeksi
   late int _selectedIndex;
 
   @override
   void initState() {
     super.initState();
-    // Uygulama açıldığında veya yönlendirme yapıldığında gelen indexi ata
     _selectedIndex = widget.initialIndex;
   }
 
-  // Navigasyon çubuğundaki her bir seçenek için görüntülenecek sayfalar
+  // Görüntülenecek sayfalar
   final List<Widget> _pages = [
-    const HomeScreen(),      // Yük Akışı (Feed) - İndeks 0
-    const MyJobsScreen(),    // İşlerim / İlanlarım - İndeks 1
-    const MessagesScreen(),  // Mesajlaşma - İndeks 2
-    const ProfileScreen(),   // Profil ve Ayarlar - İndeks 3
+    const HomeScreen(),      // İndeks 0 (AppBar burada olacak)
+    const MyJobsScreen(),    // İndeks 1
+    const MessagesScreen(),  // İndeks 2
+    const ProfileScreen(),   // İndeks 3
   ];
-
-  // Sekme değiştirme fonksiyonu
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // IndexedStack kullanarak sayfalar arası geçişte verilerin kaybolmasını önlüyoruz
+      // AppBar buradan tamamen kaldırıldı. 
+      // Her sayfa kendi Scaffold'u içinde kendi AppBar'ını yönetebilir.
+      
       body: IndexedStack(
         index: _selectedIndex,
         children: _pages,
       ),
+
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
+        onTap: (index) => setState(() => _selectedIndex = index),
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
         selectedItemColor: const Color(0xFFF3722C), // Tirigo Turuncusu
         unselectedItemColor: Colors.blueGrey,
-        selectedLabelStyle: const TextStyle(
-          fontWeight: FontWeight.bold, 
-          fontSize: 12,
-        ),
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
         unselectedLabelStyle: const TextStyle(fontSize: 12),
         showUnselectedLabels: true,
         items: const [
@@ -79,7 +68,7 @@ class _MainScreenState extends State<MainScreen> {
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline), 
-            activeIcon: Icon(Icons.person), // İkon düzeltildi
+            activeIcon: Icon(Icons.person),
             label: 'Profil',
           ),
         ],

@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'user_profile_screen.dart'; // Import eklendi
-
-
+// DEĞİŞİKLİK: Eski user_profile_screen.dart silindi, profile_screen.dart eklendi
+import 'profile_screen.dart'; 
 
 class ChatDetailScreen extends StatefulWidget {
   final String chatId;
   final String receiverName;
-  final String receiverId; // ID parametresi eklendi
+  final String receiverId;
 
   const ChatDetailScreen({
     super.key, 
     required this.chatId, 
     required this.receiverName,
-    required this.receiverId // Constructor güncellendi
+    required this.receiverId 
   });
 
   @override
@@ -43,7 +42,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         'updatedAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      print("Mesaj gönderilemedi: $e");
+      debugPrint("Mesaj gönderilemedi: $e");
     }
   }
 
@@ -51,11 +50,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        // Başlığa tıklayınca profile giden GestureDetector eklendi
+        // Başlığa tıklayınca profile giden GestureDetector
         title: GestureDetector(
           onTap: () {
+            // GÜNCELLEME: ProfileScreen çağırılıyor
             Navigator.push(context, MaterialPageRoute(
-              builder: (c) => UserProfileScreen(userId: widget.receiverId)
+              builder: (c) => ProfileScreen(userId: widget.receiverId)
             ));
           },
           child: Column(

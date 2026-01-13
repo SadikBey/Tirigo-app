@@ -15,30 +15,50 @@ class FirebaseService {
   // --- İLAN (JOB) İŞLEMLERİ ---
 
   Future<void> ilanEkle({
-  required String origin,
-  required String destination,
-  required String loadType,
-  required String weight,
-  required String truckType,
-  required double price,
-  required String companyName,
-}) async {
-  final user = _auth.currentUser;
-  if (user == null) return;
+    required String userId,
+    required String origin,
+    required String destination,
+    required String loadType,
+    required String weight,
+    required String truckType,
+    required double price,
+    required String companyName,
+  }) async {
+    try {
+      await _firestore.collection('jobs').add({
+        'userId': userId,
+        'origin': origin,
+        'destination': destination,
+        'loadType': loadType,
+        'weight': weight,
+        'truckType': truckType,
+        'price': price,
+        'companyName': companyName,
+        'status': 'open',
+        'createdAt': FieldValue.serverTimestamp(),
+        // Başlangıçta bu alanlar boş durmalı
+        'acceptedDriverId': null,
+        'acceptedDriverName': null,
+      });
+    } catch (e) {
+      print("İlan ekleme hatası: $e");
+      rethrow;
+    }
+  }
 
-  await _firestore.collection('jobs').add({
-    'userId': user.uid, // Şirketin ID'sini buraya kaydediyoruz
-    'origin': origin,
-    'destination': destination,
-    'loadType': loadType,
-    'weight': weight,
-    'truckType': truckType,
-    'price': price,
-    'companyName': companyName,
-    'status': 'open',
-    'createdAt': FieldValue.serverTimestamp(),
-  });
-}
+  // --- YENİ: İŞİ TAMAMLA (Şoför Tarafından) ---
+  Future<void> isiTamamla(String jobId) async {
+    try {
+      // İşin durumunu 'completed' (tamamlandı) yapar ve bitiş zamanını ekler
+      await _firestore.collection('jobs').doc(jobId).update({
+        'status': 'completed',
+        'completedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print("İş tamamlanırken hata: $e");
+      rethrow;
+    }
+  }
 
   Stream<QuerySnapshot> kullaniciIlanlariniGetir(String uid) {
     return _firestore
@@ -68,25 +88,19 @@ class FirebaseService {
         .snapshots();
   }
 
-  // 5. Şoförün Teklif Vermesi (HEM BİLDİRİM HEM MESAJ KUTUSU AÇAR)
-  // --- TEKLİF VERME: BİLDİRİM VE OTOMATİK SOHBET DAHİL ---
   Future<void> teklifVer({
     required String jobId,
     required double offerPrice,
     required String driverName,
-    required String companyId, 
+    required String companyId,
     required String jobTitle,
   }) async {
     final user = _auth.currentUser;
     if (user == null) throw Exception("Oturum açılmamış!");
 
-    // KRİTİK KONTROL: Eğer companyId boş gelirse işlemi durdurur
-    if (companyId.isEmpty || companyId == "") {
-      print("HATA: companyId boş geldiği için işlem iptal edildi.");
+    if (companyId.isEmpty) {
       throw Exception("İlan sahibi bilgisi eksik. Lütfen sayfayı yenileyin.");
     }
-
-    print("DEBUG: Teklif süreci başladı... Alıcı: $companyId");
 
     final batch = _firestore.batch();
 
@@ -97,58 +111,46 @@ class FirebaseService {
       'companyId': companyId,
       'driverId': user.uid,
       'driverName': driverName,
-      'price': offerPrice,
+      'offeredPrice': offerPrice, // JobDetailsScreen ile uyumlu isim
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    // 2. 'notifications' koleksiyonuna şirket için bildirim ekle
+    // 2. 'notifications' bildirim ekle
     DocumentReference notificationRef = _firestore.collection('notifications').doc();
     batch.set(notificationRef, {
       'receiverId': companyId,
       'title': 'Yeni Teklif Geldi! 🚚',
-      'message': '$driverName şoförü "$jobTitle" ilanı için $offerPrice ₺ teklif verdi.',
+      'message': '$driverName şoförü "$jobTitle" için $offerPrice ₺ teklif verdi.',
       'type': 'new_offer',
       'createdAt': FieldValue.serverTimestamp(),
       'isRead': false,
     });
 
     try {
-      // 3. Sohbet odasını oluştur/hazırla
       String chatId = await sohbetBaslat(companyId, "İlan Sahibi");
       
-      // 4. Sohbetin içine ilk mesajı otomatik at
       DocumentReference msgRef = _firestore.collection('chats').doc(chatId).collection('messages').doc();
       batch.set(msgRef, {
         'senderId': user.uid,
-        'text': '"$jobTitle" ilanınız için $offerPrice ₺ teklif verdim. Detaylar için buradayım.',
+        'text': '"$jobTitle" ilanınız için $offerPrice ₺ teklif verdim.',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // 5. Sohbet listesindeki son mesaj önizlemesini güncelle
       DocumentReference chatRef = _firestore.collection('chats').doc(chatId);
       batch.update(chatRef, {
         'lastMessage': '"$jobTitle" için $offerPrice ₺ teklif verildi.',
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      // Tüm işlemleri tek seferde Firebase'e gönder
       await batch.commit();
-      print("BAŞARILI: Teklif, Bildirim ve Mesaj oluşturuldu.");
     } catch (e) {
-      print("HATA: Batch işlemi sırasında bir sorun oluştu: $e");
       rethrow;
     }
   }
 
-  Future<void> teklifDurumuGuncelle(String offerId, String newStatus) async {
-    await _firestore.collection('offers').doc(offerId).update({
-      'status': newStatus,
-    });
-  }
-
-  // --- ONAYLAMA VE BİLDİRİM ---
-
+  // --- GÜNCELLENEN ONAYLAMA FONKSİYONU ---
+  // Teklif onaylandığında şoförün ID'sini işin (Job) içine yazar.
   Future<void> teklifiOnaylaVeBildirimGonder({
     required String jobId,
     required String offerId,
@@ -158,9 +160,18 @@ class FirebaseService {
   }) async {
     final batch = _firestore.batch();
 
+    // 1. Teklifi 'accepted' yap
     batch.update(_firestore.collection('offers').doc(offerId), {'status': 'accepted'});
-    batch.update(_firestore.collection('jobs').doc(jobId), {'status': 'closed'});
 
+    // 2. İlanı 'closed' yap (veya 'on_the_way') VE şoför ID'sini ekle
+    // BURASI JobDetailsScreen'deki isJobOnMe kontrolünün çalışmasını sağlar
+    batch.update(_firestore.collection('jobs').doc(jobId), {
+      'status': 'closed', 
+      'acceptedDriverId': driverId,
+      'acceptedDriverName': driverName,
+    });
+
+    // 3. Şoföre bildirim gönder
     DocumentReference notificationRef = _firestore.collection('notifications').doc();
     batch.set(notificationRef, {
       'receiverId': driverId,
