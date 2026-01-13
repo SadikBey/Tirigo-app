@@ -233,4 +233,21 @@ class FirebaseService {
         .where('participants', arrayContains: _auth.currentUser?.uid)
         .snapshots();
   }
+
+  // --- TEKLİF DURUMUNU GÜNCELLE (REDDETME İÇİN) ---
+  // Arayüzden gelen 'rejected' komutunu Firestore'a iletir.
+  Future<void> teklifDurumuGuncelle(String offerId, String status) async {
+    try {
+      await _firestore
+          .collection('offers')
+          .doc(offerId)
+          .update({
+            'status': status,
+            'updatedAt': FieldValue.serverTimestamp(), // Zaman damgası eklemek rapor için iyidir
+          });
+    } catch (e) {
+      print("Teklif güncellenirken hata oluştu: $e");
+      rethrow;
+    }
+  }
 }
