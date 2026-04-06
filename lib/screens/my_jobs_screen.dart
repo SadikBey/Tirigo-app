@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../core/constants/constants.dart';
 import '../services/firebase_service.dart';
 import 'post_job_screen.dart';
 import 'offers_list_screen.dart';
@@ -16,23 +17,27 @@ class MyJobsScreen extends StatefulWidget {
 class _MyJobsScreenState extends State<MyJobsScreen> with SingleTickerProviderStateMixin {
   final FirebaseService _firebaseService = FirebaseService();
   late TabController _tabController;
-  String _userRole = 'driver'; 
+  String _userRole = 'driver';
   final String _currentUid = FirebaseAuth.instance.currentUser?.uid ?? "";
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _loadUserRole();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserRole() async {
     if (_currentUid.isNotEmpty) {
       final doc = await FirebaseFirestore.instance.collection('users').doc(_currentUid).get();
       if (doc.exists && mounted) {
-        setState(() {
-          _userRole = doc.data()?['role'] ?? 'driver';
-        });
+        setState(() => _userRole = doc.data()?['role'] ?? 'driver');
       }
     }
   }
@@ -40,67 +45,189 @@ class _MyJobsScreenState extends State<MyJobsScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F4F4),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(_userRole == 'company' ? "İlan Yönetimi" : "Aldığım İşler", 
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF1B263B),
+        backgroundColor: AppColors.primary,
         elevation: 0,
-        bottom: _userRole == 'company' 
-          ? TabBar(
-              controller: _tabController,
-              indicatorColor: const Color(0xFFF3722C),
-              indicatorWeight: 3,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white70,
-              tabs: const [
-                Tab(text: "Aktif İlanlarım", icon: Icon(Icons.outbox)),
-                Tab(text: "Tamamlananlar", icon: Icon(Icons.history)),
-              ],
-            )
-          : null,
+        centerTitle: false,
+        title: const Text("Tirigo", style: AppTextStyles.brandTitle),
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: AppColors.secondary,
+          indicatorWeight: 3,
+          labelColor: AppColors.textWhite,
+          unselectedLabelColor: AppColors.textWhiteLight,
+          labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+          tabs: _userRole == 'company'
+              ? const [
+                  Tab(text: "Yayında", icon: Icon(Icons.radio_button_checked, size: 16)),
+                  Tab(text: "Devam Eden", icon: Icon(Icons.local_shipping, size: 16)),
+                  Tab(text: "Tamamlanan", icon: Icon(Icons.check_circle, size: 16)),
+                ]
+              : const [
+                  Tab(text: "Bekleyenler", icon: Icon(Icons.hourglass_top, size: 16)),
+                  Tab(text: "Aktif", icon: Icon(Icons.local_shipping, size: 16)),
+                  Tab(text: "Tamamlanan", icon: Icon(Icons.check_circle, size: 16)),
+                ],
+        ),
         actions: [
           if (_userRole == 'company')
             IconButton(
               onPressed: () => Navigator.push(
-                context, 
-                MaterialPageRoute(builder: (context) => const PostJobScreen())
+                context,
+                MaterialPageRoute(builder: (_) => const PostJobScreen()),
               ),
-              icon: const Icon(Icons.add_box_rounded, color: Color(0xFFF3722C), size: 30),
-            )
+              icon: const Icon(Icons.add_box_rounded, color: AppColors.secondary, size: 28),
+            ),
         ],
       ),
-      body: _currentUid.isEmpty 
-        ? const Center(child: Text("Lütfen giriş yapın."))
-        : _userRole == 'company'
-            ? TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildStreamList(FirebaseFirestore.instance.collection('jobs').where('userId', isEqualTo: _currentUid).where('status', whereIn: ['open', 'accepted']).snapshots(), true),
-                  _buildStreamList(FirebaseFirestore.instance.collection('jobs').where('userId', isEqualTo: _currentUid).where('status', isEqualTo: 'completed').snapshots(), true),
-                ],
-              )
-            : _buildStreamList(FirebaseFirestore.instance.collection('jobs').where('acceptedDriverId', isEqualTo: _currentUid).snapshots(), false),
+      body: _currentUid.isEmpty
+          ? const Center(child: Text("Lütfen giriş yapın."))
+          : TabBarView(
+              controller: _tabController,
+              children: _userRole == 'company'
+                  ? [
+                      _buildList(
+                        FirebaseFirestore.instance.collection('jobs').where('userId', isEqualTo: _currentUid).where('status', isEqualTo: 'open').snapshots(),
+                        isOwner: true, emptyMessage: "Yayında ilanınız yok.", emptyIcon: Icons.post_add_outlined,
+                      ),
+                      _buildList(
+                        FirebaseFirestore.instance.collection('jobs').where('userId', isEqualTo: _currentUid).where('status', whereIn: ['closed', 'accepted']).snapshots(),
+                        isOwner: true, emptyMessage: "Devam eden işiniz yok.", emptyIcon: Icons.local_shipping_outlined,
+                      ),
+                      _buildList(
+                        FirebaseFirestore.instance.collection('jobs').where('userId', isEqualTo: _currentUid).where('status', isEqualTo: 'completed').snapshots(),
+                        isOwner: true, emptyMessage: "Tamamlanan işiniz yok.", emptyIcon: Icons.history_outlined,
+                      ),
+                    ]
+                  : [
+                      _buildDriverPendingList(),
+                      _buildList(
+                        FirebaseFirestore.instance.collection('jobs').where('acceptedDriverId', isEqualTo: _currentUid).where('status', whereIn: ['closed', 'accepted']).snapshots(),
+                        isOwner: false, emptyMessage: "Aktif işiniz yok.", emptyIcon: Icons.local_shipping_outlined,
+                      ),
+                      _buildList(
+                        FirebaseFirestore.instance.collection('jobs').where('acceptedDriverId', isEqualTo: _currentUid).where('status', isEqualTo: 'completed').snapshots(),
+                        isOwner: false, emptyMessage: "Tamamlanan işiniz yok.", emptyIcon: Icons.history_outlined,
+                      ),
+                    ],
+            ),
     );
   }
 
-  Widget _buildStreamList(Stream<QuerySnapshot> stream, bool isOwner) {
+  Widget _buildDriverPendingList() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('offers').where('driverId', isEqualTo: _currentUid).where('status', isEqualTo: 'pending').snapshots(),
+      builder: (context, offerSnap) {
+        if (offerSnap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: AppColors.secondary));
+        }
+        final offers = offerSnap.data?.docs ?? [];
+        if (offers.isEmpty) return _buildEmptyState("Bekleyen teklifiniz yok.", Icons.hourglass_empty_outlined);
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          itemCount: offers.length,
+          itemBuilder: (context, index) {
+            final offerData = offers[index].data() as Map<String, dynamic>;
+            final String jobId = offerData['jobId'] ?? '';
+            final String offeredPrice = offerData['offeredPrice']?.toString() ?? '0';
+            return FutureBuilder<DocumentSnapshot>(
+              future: FirebaseFirestore.instance.collection('jobs').doc(jobId).get(),
+              builder: (context, jobSnap) {
+                if (!jobSnap.hasData || !jobSnap.data!.exists) return const SizedBox();
+                final jobData = jobSnap.data!.data() as Map<String, dynamic>;
+                return _buildPendingOfferCard(jobData, jobId, offeredPrice);
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPendingOfferCard(Map<String, dynamic> jobData, String jobId, String offeredPrice) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundCard,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: AppColors.shadow, blurRadius: 8)],
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+      ),
+      child: InkWell(
+        onTap: () => Navigator.push(context, MaterialPageRoute(
+          builder: (_) => JobDetailsScreen(jobData: jobData, jobId: jobId),
+        )),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.location_on, color: AppColors.secondary, size: 16),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      "${jobData['origin']?.toUpperCase()} → ${jobData['destination']?.toUpperCase()}",
+                      style: AppTextStyles.labelBold, overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              const Divider(height: 1),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Teklifim", style: TextStyle(fontSize: 11, color: AppColors.textHint)),
+                      Text("$offeredPrice ₺", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.success)),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.warning.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.hourglass_top, size: 12, color: AppColors.warning),
+                        SizedBox(width: 4),
+                        Text("Yanıt Bekleniyor", style: TextStyle(fontSize: 11, color: AppColors.warning, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildList(Stream<QuerySnapshot> stream, {required bool isOwner, required String emptyMessage, required IconData emptyIcon}) {
     return StreamBuilder<QuerySnapshot>(
       stream: stream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: Color(0xFFF3722C)));
+          return const Center(child: CircularProgressIndicator(color: AppColors.secondary));
         }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return _buildEmptyState(isOwner);
-        }
-
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return _buildEmptyState(emptyMessage, emptyIcon);
         return ListView.builder(
-          padding: const EdgeInsets.symmetric(vertical: 15),
+          padding: const EdgeInsets.symmetric(vertical: 12),
           itemCount: snapshot.data!.docs.length,
           itemBuilder: (context, index) {
-            var jobDoc = snapshot.data!.docs[index];
-            var jobData = jobDoc.data() as Map<String, dynamic>;
+            final jobDoc = snapshot.data!.docs[index];
+            final jobData = jobDoc.data() as Map<String, dynamic>;
             return _buildJobCard(jobDoc.id, jobData, isOwner);
           },
         );
@@ -109,23 +236,22 @@ class _MyJobsScreenState extends State<MyJobsScreen> with SingleTickerProviderSt
   }
 
   Widget _buildJobCard(String jobId, Map<String, dynamic> data, bool isOwner) {
+    final String status = data['status'] ?? 'open';
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.backgroundCard,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: AppColors.shadow, blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(
         children: [
-          // --- 1. KISIM: İLAN SAHİBİ PROFİL BARI ---
           _buildOwnerProfileBar(data['userId']),
-          
           const Divider(height: 1, indent: 16, endIndent: 16),
-
-          // --- 2. KISIM: İLAN İÇERİĞİ ---
           InkWell(
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => JobDetailsScreen(jobData: data, jobId: jobId))),
+            onTap: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => JobDetailsScreen(jobData: data, jobId: jobId),
+            )),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -135,108 +261,84 @@ class _MyJobsScreenState extends State<MyJobsScreen> with SingleTickerProviderSt
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("${data['origin']?.toUpperCase()} ➔ ${data['destination']?.toUpperCase()}", 
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                        const SizedBox(height: 8),
-                        Text("${data['loadType'] ?? 'Yük'} | ${data['weight'] ?? '0'} Ton", 
-                          style: const TextStyle(color: Colors.black87, fontSize: 13)),
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on, color: AppColors.secondary, size: 16),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                "${data['origin']?.toUpperCase()} ➔ ${data['destination']?.toUpperCase()}",
+                                style: AppTextStyles.labelBold, overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text("${data['loadType'] ?? 'Yük'} | ${data['weight'] ?? '0'} Ton", style: AppTextStyles.bodySmall),
                         const SizedBox(height: 4),
-                        Text("${data['price'] ?? '0'} ₺", 
-                          style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 17)),
+                        Text("${data['price'] ?? '0'} ₺", style: AppTextStyles.price),
                       ],
                     ),
                   ),
-                  _buildStatusBadge(data['status'] ?? 'open'),
+                  _buildStatusBadge(status),
                 ],
               ),
             ),
           ),
-          
-          const Divider(height: 1),
-
-          // --- 3. KISIM: ALT AKSİYONLAR ---
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                if (isOwner) ...[
+          if (isOwner) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
                   _buildOfferButton(jobId, data),
                   IconButton(
                     onPressed: () => _confirmDelete(jobId),
-                    icon: const Icon(Icons.delete_sweep_outlined, color: Colors.redAccent, size: 22),
+                    icon: const Icon(Icons.delete_sweep_outlined, color: AppColors.error, size: 22),
                   ),
-                ] else ...[
-                  const Padding(
-                    padding: EdgeInsets.only(left: 8.0),
-                    child: Text("Bu İş Sizin Üzerinizde", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 12)),
-                  ),
-                  const Icon(Icons.local_shipping, color: Colors.blue, size: 20),
-                ]
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
   }
 
-  // --- İLAN SAHİBİ ÇEKEN ÖZEL FONKSİYON ---
-  Widget _buildOwnerProfileBar(String? ownerId) {
-    if (ownerId == null || ownerId.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(12.0),
-        child: Text("Hata: userId bulunamadı!", style: TextStyle(color: Colors.red, fontSize: 11)),
-      );
-    }
-
+  Widget _buildOwnerProfileBar(String? userId) {
+    if (userId == null || userId.isEmpty) return const SizedBox();
     return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection('users').doc(ownerId).get(),
+      future: FirebaseFirestore.instance.collection('users').doc(userId).get(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox(height: 40, child: Center(child: LinearProgressIndicator(minHeight: 1)));
-        }
-
+        String name = "Bilinmiyor";
+        String? photoUrl;
         if (snapshot.hasData && snapshot.data!.exists) {
           var uData = snapshot.data!.data() as Map<String, dynamic>;
-          
-          // Veritabanındaki farklı alan isimlerini destekler (name, userName, companyName)
-          String name = uData['name'] ?? uData['userName'] ?? uData['companyName'] ?? "İsimsiz Kullanıcı";
-          String? photoUrl = uData['photoUrl'];
-
-          return InkWell(
-            onTap: () {
-               debugPrint("Profil Sayfasına Git: $ownerId");
-               // Navigator.push(context, MaterialPageRoute(builder: (context) => ProfileScreen(userId: ownerId)));
-            },
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 12,
-                    backgroundColor: Colors.blueGrey[50],
-                    backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
-                    child: (photoUrl == null || photoUrl.isEmpty) ? const Icon(Icons.person, size: 14, color: Colors.blueGrey) : null,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1B263B))),
-                  const Spacer(),
-                  const Icon(Icons.chevron_right, size: 14, color: Colors.grey),
-                ],
-              ),
-            ),
-          );
+          final firstName = uData['firstName'] ?? '';
+          final lastName = uData['lastName'] ?? '';
+          final fullName = "$firstName $lastName".trim();
+          name = fullName.isNotEmpty ? fullName : (uData['name'] ?? uData['companyName'] ?? "Bilinmiyor");
+          photoUrl = uData['photoUrl'];
         }
-
-        // Kullanıcı ID'si var ama 'users' koleksiyonunda bu belge yoksa:
-        return Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        return Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          child: Row(
             children: [
-              const Text("⚠️ Kullanıcı Kaydı Eksik!", style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 11)),
-              Text("ID: $ownerId", style: const TextStyle(color: Colors.grey, fontSize: 10)),
+              CircleAvatar(
+                radius: 11,
+                backgroundColor: Colors.blueGrey[50],
+                backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
+                child: (photoUrl == null || photoUrl.isEmpty) ? const Icon(Icons.person, size: 14, color: AppColors.textSecondary) : null,
+              ),
+              const SizedBox(width: 8),
+              Text(name, style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600, color: AppColors.primary)),
+              const Spacer(),
+              const Icon(Icons.chevron_right, size: 14, color: AppColors.textHint),
             ],
           ),
         );
@@ -250,37 +352,53 @@ class _MyJobsScreenState extends State<MyJobsScreen> with SingleTickerProviderSt
       builder: (context, offerSnapshot) {
         int offerCount = offerSnapshot.hasData ? offerSnapshot.data!.docs.length : 0;
         return TextButton.icon(
-          onPressed: () {
-            Navigator.push(context, MaterialPageRoute(
-              builder: (context) => OffersListScreen(jobId: jobId, jobTitle: "${data['origin']} - ${data['destination']}")
-            ));
-          },
-          icon: Icon(Icons.local_offer, size: 16, color: offerCount > 0 ? Colors.green : Colors.blueGrey),
-          label: Text("$offerCount Teklif", 
-            style: TextStyle(color: offerCount > 0 ? Colors.green : Colors.blueGrey, fontWeight: FontWeight.bold, fontSize: 12)),
+          onPressed: () => Navigator.push(context, MaterialPageRoute(
+            builder: (_) => OffersListScreen(jobId: jobId, jobTitle: "${data['origin']} - ${data['destination']}"),
+          )),
+          icon: Icon(Icons.local_offer, size: 16, color: offerCount > 0 ? AppColors.success : AppColors.textSecondary),
+          label: Text("$offerCount Teklif",
+              style: TextStyle(color: offerCount > 0 ? AppColors.success : AppColors.textSecondary, fontWeight: FontWeight.bold, fontSize: 12)),
         );
       },
     );
   }
 
   Widget _buildStatusBadge(String status) {
-    Color color = status == 'open' ? Colors.green : (status == 'completed' ? Colors.grey : Colors.blue);
-    String text = status == 'open' ? "YAYINDA" : (status == 'completed' ? "BİTTİ" : "YOLDA");
+    Color color;
+    String text;
+    IconData icon;
+    switch (status) {
+      case 'open': color = AppColors.success; text = "YAYINDA"; icon = Icons.radio_button_checked; break;
+      case 'closed': case 'accepted': color = AppColors.info; text = "YOLDA"; icon = Icons.local_shipping; break;
+      case 'completed': color = AppColors.textHint; text = "BİTTİ"; icon = Icons.check_circle; break;
+      default: color = AppColors.textHint; text = status.toUpperCase(); icon = Icons.info;
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-      child: Text(text, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold)),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: color),
+          const SizedBox(width: 4),
+          Text(text, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold)),
+        ],
+      ),
     );
   }
 
-  Widget _buildEmptyState(bool isOwner) {
+  Widget _buildEmptyState(String message, IconData icon) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.assignment_late_outlined, size: 60, color: Colors.grey[300]),
-          const SizedBox(height: 15),
-          Text(isOwner ? "Henüz bir ilanınız yok." : "Kabul ettiğiniz bir iş bulunmuyor.", style: const TextStyle(color: Colors.grey)),
+          Icon(icon, size: 60, color: Colors.grey[300]),
+          const SizedBox(height: 10),
+          Text(message, style: const TextStyle(color: AppColors.textHint)),
         ],
       ),
     );
@@ -289,12 +407,17 @@ class _MyJobsScreenState extends State<MyJobsScreen> with SingleTickerProviderSt
   void _confirmDelete(String jobId) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text("İlanı Sil"),
         content: const Text("Bu ilanı silmek istediğinize emin misiniz?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Vazgeç")),
-          TextButton(onPressed: () { _firebaseService.ilanSil(jobId); Navigator.pop(context); }, child: const Text("Sil", style: TextStyle(color: Colors.red))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () { _firebaseService.ilanSil(jobId); Navigator.pop(context); },
+            child: const Text("Sil", style: TextStyle(color: AppColors.textWhite)),
+          ),
         ],
       ),
     );

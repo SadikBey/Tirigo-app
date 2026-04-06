@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../core/constants/constants.dart';
 import '../models/job_model.dart';
 import 'job_details_screen.dart';
 import 'post_job_screen.dart';
@@ -18,15 +19,13 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _userPhotoUrl;
   String _userRole = 'driver';
 
-  // Arama ve Filtreleme Kontrolcüleri
   final TextEditingController _originSearchController = TextEditingController();
   final TextEditingController _destSearchController = TextEditingController();
   String _originFilter = "";
   String _destFilter = "";
-  
-  // Filtreleme Seçenekleri
   String _selectedLoadType = "Hepsi";
   String _selectedVehicleType = "Hepsi";
+
   final List<String> _loadTypes = ["Hepsi", "Gıda", "Demir", "Tekstil", "İnşaat", "Kimyasal", "Mobilya"];
   final List<String> _vehicleTypes = ["Hepsi", "Tenteli Tır", "Kamyon", "Onteker", "Panelvan", "Kırkayak"];
 
@@ -37,7 +36,12 @@ class _HomeScreenState extends State<HomeScreen> {
     _listenForNewNotifications();
   }
 
-  // --- BİLDİRİM VE VERİ DİNLEYİCİLERİ ---
+  @override
+  void dispose() {
+    _originSearchController.dispose();
+    _destSearchController.dispose();
+    super.dispose();
+  }
 
   void _listenForNewNotifications() {
     final String currentUid = _auth.currentUser?.uid ?? "";
@@ -64,19 +68,15 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-            Text(message, style: const TextStyle(fontSize: 12, color: Colors.white70)),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textWhite)),
+            Text(message, style: const TextStyle(fontSize: 12, color: AppColors.textWhiteLight)),
           ],
         ),
-        backgroundColor: const Color(0xFF1B263B),
+        backgroundColor: AppColors.primary,
         duration: const Duration(seconds: 4),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        action: SnackBarAction(
-          label: 'GÖR',
-          textColor: const Color(0xFFF3722C),
-          onPressed: _showNotificationsPopup,
-        ),
+        action: SnackBarAction(label: 'GÖR', textColor: AppColors.secondary, onPressed: _showNotificationsPopup),
       ),
     );
   }
@@ -98,92 +98,76 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // --- FİLTRELEME BOTTOM SHEET ---
-
   void _showFilterBottomSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 25),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 25),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("Filtrele", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                      TextButton(
-                        onPressed: () {
-                          setModalState(() { _selectedLoadType = "Hepsi"; _selectedVehicleType = "Hepsi"; });
-                          setState(() { _selectedLoadType = "Hepsi"; _selectedVehicleType = "Hepsi"; });
-                        },
-                        child: const Text("Sıfırla", style: TextStyle(color: Colors.red)),
-                      )
-                    ],
-                  ),
-                  const SizedBox(height: 15),
-                  const Text("Yük Cinsi", style: TextStyle(fontWeight: FontWeight.w600, color: Colors.blueGrey)),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    children: _loadTypes.map((type) {
-                      bool isSelected = _selectedLoadType == type;
-                      return ChoiceChip(
-                        label: Text(type),
-                        selected: isSelected,
-                        selectedColor: const Color(0xFFF3722C),
-                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black),
-                        onSelected: (val) {
-                          setModalState(() => _selectedLoadType = type);
-                          setState(() => _selectedLoadType = type);
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text("Araç Tipi", style: TextStyle(fontWeight: FontWeight.w600, color: Colors.blueGrey)),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    children: _vehicleTypes.map((type) {
-                      bool isSelected = _selectedVehicleType == type;
-                      return ChoiceChip(
-                        label: Text(type),
-                        selected: isSelected,
-                        selectedColor: const Color(0xFF1B263B),
-                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black),
-                        onSelected: (val) {
-                          setModalState(() => _selectedVehicleType = type);
-                          setState(() => _selectedVehicleType = type);
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 30),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFF3722C),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text("SONUÇLARI GÖSTER", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ),
+                  const Text("Filtrele", style: AppTextStyles.heading2),
+                  TextButton(
+                    onPressed: () {
+                      setModalState(() { _selectedLoadType = "Hepsi"; _selectedVehicleType = "Hepsi"; });
+                      setState(() { _selectedLoadType = "Hepsi"; _selectedVehicleType = "Hepsi"; });
+                    },
+                    child: const Text("Sıfırla", style: TextStyle(color: AppColors.error)),
                   ),
                 ],
               ),
-            );
-          },
-        );
-      },
+              const SizedBox(height: 15),
+              const Text("Yük Cinsi", style: AppTextStyles.labelBold),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                children: _loadTypes.map((type) {
+                  bool isSelected = _selectedLoadType == type;
+                  return ChoiceChip(
+                    label: Text(type),
+                    selected: isSelected,
+                    selectedColor: AppColors.secondary,
+                    labelStyle: TextStyle(color: isSelected ? AppColors.textWhite : AppColors.textPrimary),
+                    onSelected: (_) { setModalState(() => _selectedLoadType = type); setState(() => _selectedLoadType = type); },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 20),
+              const Text("Araç Tipi", style: AppTextStyles.labelBold),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                children: _vehicleTypes.map((type) {
+                  bool isSelected = _selectedVehicleType == type;
+                  return ChoiceChip(
+                    label: Text(type),
+                    selected: isSelected,
+                    selectedColor: AppColors.primary,
+                    labelStyle: TextStyle(color: isSelected ? AppColors.textWhite : AppColors.textPrimary),
+                    onSelected: (_) { setModalState(() => _selectedVehicleType = type); setState(() => _selectedVehicleType = type); },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 30),
+              SizedBox(
+                width: double.infinity, height: 50,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("SONUÇLARI GÖSTER", style: AppTextStyles.buttonPrimary),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -208,26 +192,25 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => const NotificationsScreen(),
+      builder: (_) => const NotificationsScreen(),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final String currentUid = _auth.currentUser?.uid ?? "";
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F4F4),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1B263B),
+        backgroundColor: AppColors.primary,
         elevation: 0,
         centerTitle: false,
-        title: const Text("Tirigo", style: TextStyle(color: Color(0xFFF3722C), fontWeight: FontWeight.bold, fontSize: 24)),
+        title: const Text("Tirigo", style: AppTextStyles.brandTitle),
         actions: [
           if (_userRole == 'company')
             IconButton(
-              icon: const Icon(Icons.add_circle_outline, color: Colors.white),
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PostJobScreen())),
+              icon: const Icon(Icons.add_circle_outline, color: AppColors.textWhite),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PostJobScreen())),
             ),
           _buildNotificationIcon(currentUid),
           _buildProfileAvatar(),
@@ -238,31 +221,19 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildTopSearchArea(),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('jobs')
-                  .where('status', isEqualTo: 'open')
-                  .orderBy('createdAt', descending: true)
-                  .snapshots(),
+              stream: FirebaseFirestore.instance.collection('jobs').where('status', isEqualTo: 'open').orderBy('createdAt', descending: true).snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Color(0xFFF3722C)));
+                  return const Center(child: CircularProgressIndicator(color: AppColors.secondary));
                 }
-
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return _buildEmptyState();
 
-                // FİLTRELEME MANTIĞI
                 var filteredDocs = snapshot.data!.docs.where((doc) {
                   var data = doc.data() as Map<String, dynamic>;
-                  String origin = (data['origin'] ?? "").toString().toLowerCase();
-                  String dest = (data['destination'] ?? "").toString().toLowerCase();
-                  String loadType = (data['loadType'] ?? "");
-                  String vehicle = (data['truckType'] ?? "");
-
-                  bool matchesSearch = origin.contains(_originFilter.toLowerCase()) && 
-                                       dest.contains(_destFilter.toLowerCase());
-                  bool matchesLoad = (_selectedLoadType == "Hepsi") || (loadType == _selectedLoadType);
-                  bool matchesVehicle = (_selectedVehicleType == "Hepsi") || (vehicle == _selectedVehicleType);
-
+                  bool matchesSearch = (data['origin'] ?? "").toString().toLowerCase().contains(_originFilter.toLowerCase()) &&
+                      (data['destination'] ?? "").toString().toLowerCase().contains(_destFilter.toLowerCase());
+                  bool matchesLoad = (_selectedLoadType == "Hepsi") || ((data['loadType'] ?? "") == _selectedLoadType);
+                  bool matchesVehicle = (_selectedVehicleType == "Hepsi") || ((data['truckType'] ?? "") == _selectedVehicleType);
                   return matchesSearch && matchesLoad && matchesVehicle;
                 }).toList();
 
@@ -285,15 +256,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- UI BİLEŞENLERİ ---
-
   Widget _buildTopSearchArea() {
     bool hasActiveFilter = _selectedLoadType != "Hepsi" || _selectedVehicleType != "Hepsi";
-
     return Container(
       padding: const EdgeInsets.fromLTRB(15, 5, 15, 20),
       decoration: const BoxDecoration(
-        color: Color(0xFF1B263B),
+        color: AppColors.primary,
         borderRadius: BorderRadius.only(bottomLeft: Radius.circular(20), bottomRight: Radius.circular(20)),
       ),
       child: Row(
@@ -301,11 +269,11 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: Container(
               height: 50,
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: AppColors.backgroundCard, borderRadius: BorderRadius.circular(12)),
               child: Row(
                 children: [
                   _buildSearchField(_originSearchController, 'Nereden?', (val) => setState(() => _originFilter = val)),
-                  const Icon(Icons.swap_horiz, size: 18, color: Colors.grey),
+                  const Icon(Icons.swap_horiz, size: 18, color: AppColors.textHint),
                   _buildSearchField(_destSearchController, 'Nereye?', (val) => setState(() => _destFilter = val)),
                 ],
               ),
@@ -317,10 +285,10 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: hasActiveFilter ? const Color(0xFFF3722C) : const Color(0xFF3E4A5E),
+                color: hasActiveFilter ? AppColors.secondary : const Color(0xFF3E4A5E),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.tune, color: Colors.white, size: 24),
+              child: const Icon(Icons.tune, color: AppColors.textWhite, size: 24),
             ),
           ),
         ],
@@ -337,7 +305,7 @@ class _HomeScreenState extends State<HomeScreen> {
         textAlign: TextAlign.center,
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+          hintStyle: AppTextStyles.hint,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(horizontal: 10),
         ),
@@ -347,16 +315,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildNotificationIcon(String currentUid) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('notifications')
-          .where('receiverId', isEqualTo: currentUid)
-          .where('isRead', isEqualTo: false).snapshots(),
+      stream: FirebaseFirestore.instance.collection('notifications').where('receiverId', isEqualTo: currentUid).where('isRead', isEqualTo: false).snapshots(),
       builder: (context, snapshot) {
         bool hasNotif = snapshot.hasData && snapshot.data!.docs.isNotEmpty;
         return Stack(
           alignment: Alignment.center,
           children: [
-            IconButton(icon: const Icon(Icons.notifications_none, color: Colors.white, size: 28), onPressed: _showNotificationsPopup),
-            if (hasNotif) Positioned(right: 12, top: 12, child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFF3722C), shape: BoxShape.circle))),
+            IconButton(icon: const Icon(Icons.notifications_none, color: AppColors.textWhite, size: 28), onPressed: _showNotificationsPopup),
+            if (hasNotif) Positioned(right: 12, top: 12, child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.secondary, shape: BoxShape.circle))),
           ],
         );
       },
@@ -370,7 +336,7 @@ class _HomeScreenState extends State<HomeScreen> {
         radius: 17,
         backgroundColor: Colors.white24,
         backgroundImage: _userPhotoUrl != null && _userPhotoUrl!.isNotEmpty ? NetworkImage(_userPhotoUrl!) : null,
-        child: (_userPhotoUrl == null || _userPhotoUrl!.isEmpty) ? const Icon(Icons.person, size: 20, color: Colors.white) : null,
+        child: (_userPhotoUrl == null || _userPhotoUrl!.isEmpty) ? const Icon(Icons.person, size: 20, color: AppColors.textWhite) : null,
       ),
     );
   }
@@ -379,16 +345,15 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.backgroundCard,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: AppColors.shadow, blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: InkWell(
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => JobDetailsScreen(jobData: job.toMap(), jobId: job.id))),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => JobDetailsScreen(jobData: job.toMap(), jobId: job.id))),
         borderRadius: BorderRadius.circular(16),
         child: Column(
           children: [
-            // 1. ÜST KISIM: Rota ve Fiyat
             Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -397,39 +362,30 @@ class _HomeScreenState extends State<HomeScreen> {
                   Expanded(
                     child: Row(
                       children: [
-                        const Icon(Icons.location_on, color: Color(0xFFF3722C), size: 18),
+                        const Icon(Icons.location_on, color: AppColors.secondary, size: 18),
                         const SizedBox(width: 4),
-                        Flexible(child: Text(job.origin.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 4),
-                          child: Icon(Icons.arrow_forward, color: Colors.grey, size: 14),
-                        ),
-                        Flexible(child: Text(job.destination.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
+                        Flexible(child: Text(job.origin.toUpperCase(), style: AppTextStyles.route)),
+                        const Padding(padding: EdgeInsets.symmetric(horizontal: 4), child: Icon(Icons.arrow_forward, color: AppColors.textHint, size: 14)),
+                        Flexible(child: Text(job.destination.toUpperCase(), style: AppTextStyles.route)),
                       ],
                     ),
                   ),
-                  Text('${job.price.toInt()} ₺', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 17)),
+                  Text('${job.price.toInt()} ₺', style: AppTextStyles.price),
                 ],
               ),
             ),
-            
             const Divider(height: 1, indent: 16, endIndent: 16),
-
-            // 2. ORTA KISIM: Yük Bilgileri
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
-                  const Icon(Icons.local_shipping_outlined, size: 18, color: Colors.blueGrey),
+                  const Icon(Icons.local_shipping_outlined, size: 18, color: AppColors.textSecondary),
                   const SizedBox(width: 8),
-                  Text('${job.loadType} | ${job.weight} Ton', style: const TextStyle(fontSize: 13, color: Colors.black87)),
+                  Text('${job.loadType} | ${job.weight} Ton', style: AppTextStyles.bodySmall),
                 ],
               ),
             ),
-
             const Divider(height: 1),
-
-            // 3. ALT KISIM: Dinamik Profil Barı
             _buildMiniProfileBar(job),
           ],
         ),
@@ -437,38 +393,32 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Yeni Eklenen Dinamik Profil Barı Fonksiyonu
   Widget _buildMiniProfileBar(JobModel job) {
     return FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance.collection('users').doc(job.userId).get(),
       builder: (context, snapshot) {
-        String name = job.companyName; // Default olarak modeldeki companyName
+        String name = job.companyName;
         String? photoUrl;
-
         if (snapshot.hasData && snapshot.data!.exists) {
           var uData = snapshot.data!.data() as Map<String, dynamic>;
           name = uData['name'] ?? uData['userName'] ?? job.companyName;
           photoUrl = uData['photoUrl'];
         }
-
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
-          ),
+          decoration: BoxDecoration(color: Colors.grey[50], borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16))),
           child: Row(
             children: [
               CircleAvatar(
                 radius: 11,
                 backgroundColor: Colors.blueGrey[50],
                 backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
-                child: (photoUrl == null || photoUrl.isEmpty) ? const Icon(Icons.person, size: 14, color: Colors.blueGrey) : null,
+                child: (photoUrl == null || photoUrl.isEmpty) ? const Icon(Icons.person, size: 14, color: AppColors.textSecondary) : null,
               ),
               const SizedBox(width: 8),
-              Text(name, style: const TextStyle(fontSize: 12, color: Colors.blueGrey, fontWeight: FontWeight.w600)),
+              Text(name, style: AppTextStyles.bodySmall.copyWith(fontWeight: FontWeight.w600)),
               const Spacer(),
-              const Text('Detayları Gör >', style: TextStyle(color: Color(0xFF1B263B), fontWeight: FontWeight.bold, fontSize: 11)),
+              const Text('Detayları Gör >', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 11)),
             ],
           ),
         );
@@ -483,7 +433,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Icon(Icons.search_off, size: 60, color: Colors.grey[300]),
           const SizedBox(height: 10),
-          const Text("Sonuç bulunamadı.", style: TextStyle(color: Colors.grey)),
+          const Text("Sonuç bulunamadı.", style: TextStyle(color: AppColors.textHint)),
         ],
       ),
     );
