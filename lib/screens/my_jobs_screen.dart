@@ -8,79 +8,35 @@ import 'offers_list_screen.dart';
 import 'job_details_screen.dart';
 
 class MyJobsScreen extends StatefulWidget {
-  const MyJobsScreen({super.key});
+  final TabController tabController;
+  final String userRole;
+
+  const MyJobsScreen({
+    super.key,
+    required this.tabController,
+    required this.userRole,
+  });
 
   @override
   State<MyJobsScreen> createState() => _MyJobsScreenState();
 }
 
-class _MyJobsScreenState extends State<MyJobsScreen> with SingleTickerProviderStateMixin {
+class _MyJobsScreenState extends State<MyJobsScreen> {
   final FirebaseService _firebaseService = FirebaseService();
-  late TabController _tabController;
-  String _userRole = 'driver';
   final String _currentUid = FirebaseAuth.instance.currentUser?.uid ?? "";
+
+  String get _userRole => widget.userRole;
+  TabController get _tabController => widget.tabController;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _loadUserRole();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadUserRole() async {
-    if (_currentUid.isNotEmpty) {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(_currentUid).get();
-      if (doc.exists && mounted) {
-        setState(() => _userRole = doc.data()?['role'] ?? 'driver');
-      }
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        elevation: 0,
-        centerTitle: false,
-        title: const Text("Tirigo", style: AppTextStyles.brandTitle),
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: AppColors.secondary,
-          indicatorWeight: 3,
-          labelColor: AppColors.textWhite,
-          unselectedLabelColor: AppColors.textWhiteLight,
-          labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-          tabs: _userRole == 'company'
-              ? const [
-                  Tab(text: "Yayında", icon: Icon(Icons.radio_button_checked, size: 16)),
-                  Tab(text: "Devam Eden", icon: Icon(Icons.local_shipping, size: 16)),
-                  Tab(text: "Tamamlanan", icon: Icon(Icons.check_circle, size: 16)),
-                ]
-              : const [
-                  Tab(text: "Bekleyenler", icon: Icon(Icons.hourglass_top, size: 16)),
-                  Tab(text: "Aktif", icon: Icon(Icons.local_shipping, size: 16)),
-                  Tab(text: "Tamamlanan", icon: Icon(Icons.check_circle, size: 16)),
-                ],
-        ),
-        actions: [
-          if (_userRole == 'company')
-            IconButton(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const PostJobScreen()),
-              ),
-              icon: const Icon(Icons.add_box_rounded, color: AppColors.secondary, size: 28),
-            ),
-        ],
-      ),
       body: _currentUid.isEmpty
           ? const Center(child: Text("Lütfen giriş yapın."))
           : TabBarView(

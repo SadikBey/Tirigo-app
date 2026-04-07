@@ -41,4 +41,4 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/images/google_icon.png"
+  image_path: "assets/images/tirigo-icon-2.png"

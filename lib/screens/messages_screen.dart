@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import '../core/constants/constants.dart'; // Renk sabitleri için ekledik
 import 'chat_detail_screen.dart';
-// DEĞİŞİKLİK: Eski user_profile_screen.dart yerine profile_screen.dart import edildi
 import 'profile_screen.dart'; 
 
 class MessagesScreen extends StatefulWidget {
@@ -32,21 +32,25 @@ class _MessagesScreenState extends State<MessagesScreen> {
     final String currentUserId = _auth.currentUser?.uid ?? "";
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        title: const Text("Mesajlarım", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF1B263B),
-        elevation: 0,
-      ),
+      // Arka planı genel uygulama rengine uydurduk
+      backgroundColor: AppColors.backgroundLight, 
+      
+      // AppBar'ı buradan kaldırdık çünkü MainScreen'deki ortak AppBar'ı kullanıyoruz.
+      
       body: StreamBuilder<QuerySnapshot>(
         stream: _firestore
             .collection('chats')
             .where('participants', arrayContains: currentUserId)
+            // Not: Hata almamak için orderBy kısmını şimdilik eklemedik.
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) return Center(child: Text("Hata: ${snapshot.error}"));
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text("Henüz mesajınız yok"));
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: AppColors.secondary));
+          }
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return _buildEmptyState();
+          }
 
           return ListView.builder(
             padding: const EdgeInsets.symmetric(vertical: 10),
@@ -70,12 +74,14 @@ class _MessagesScreenState extends State<MessagesScreen> {
       future: _firestore.collection('users').doc(otherUserId).get(),
       builder: (context, userSnap) {
         String name = "Yükleniyor...";
+        String? photoUrl;
         
         if (userSnap.hasData && userSnap.data!.exists) {
           var userData = userSnap.data!.data() as Map<String, dynamic>;
           String fName = userData['firstName'] ?? "";
           String lName = userData['lastName'] ?? "";
           name = "$fName $lName".trim();
+          photoUrl = userData['photoUrl'];
           
           if (name.isEmpty) {
             name = userData['email']?.split('@')[0] ?? "Kullanıcı";
@@ -92,19 +98,29 @@ class _MessagesScreenState extends State<MessagesScreen> {
           child: ListTile(
             leading: GestureDetector(
               onTap: () {
-                // GÜNCELLEME: UserProfileScreen yerine ProfileScreen çağırılıyor
                 Navigator.push(context, MaterialPageRoute(
                   builder: (c) => ProfileScreen(userId: otherUserId)
                 ));
               },
-              child: const CircleAvatar(
-                backgroundColor: Color(0xFFF3722C), 
-                child: Icon(Icons.person, color: Colors.white)
+              child: CircleAvatar(
+                backgroundColor: AppColors.primary.withOpacity(0.1), 
+                backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
+                child: (photoUrl == null || photoUrl.isEmpty) 
+                    ? const Icon(Icons.person, color: AppColors.primary) 
+                    : null,
               ),
             ),
-            title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text(data['lastMessage'] ?? "Mesaj bulunmuyor...", maxLines: 1, overflow: TextOverflow.ellipsis),
-            trailing: Text(_formatDateTime(data['updatedAt'] as Timestamp?), style: const TextStyle(fontSize: 10)),
+            title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+            subtitle: Text(
+              data['lastMessage'] ?? "Mesaj bulunmuyor...", 
+              maxLines: 1, 
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+            trailing: Text(
+              _formatDateTime(data['updatedAt'] as Timestamp?), 
+              style: const TextStyle(fontSize: 10, color: AppColors.textHint)
+            ),
             onTap: () {
               Navigator.push(context, MaterialPageRoute(
                 builder: (context) => ChatDetailScreen(
@@ -117,6 +133,23 @@ class _MessagesScreenState extends State<MessagesScreen> {
           ),
         );
       }
+    );
+  }
+
+  // Mesaj yoksa görünecek şık ekran
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.chat_bubble_outline_rounded, size: 64, color: Colors.grey[300]),
+          const SizedBox(height: 16),
+          const Text(
+            "Henüz mesajınız yok",
+            style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+          ),
+        ],
+      ),
     );
   }
 }

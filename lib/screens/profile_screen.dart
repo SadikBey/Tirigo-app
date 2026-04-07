@@ -329,105 +329,166 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // ── APPBAR ──
   Widget _buildAppBar(BuildContext context) {
+    if (!Navigator.canPop(context)) return const SizedBox();
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          if (Navigator.canPop(context))
-            IconButton(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: AppColors.textPrimary),
-            )
-          else
-            const SizedBox(width: 48),
-          Text(_isOwnProfile ? "Profilim" : "Profil", style: AppTextStyles.heading3),
-          IconButton(
-            onPressed: () => showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (_) => const NotificationsScreen(),
-            ),
-            icon: const Icon(Icons.notifications_none_rounded, size: 24, color: AppColors.textPrimary),
-          ),
-        ],
+      padding: const EdgeInsets.only(left: 4, top: 4),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: AppColors.textPrimary),
+        ),
       ),
     );
   }
 
   // ── KÜÇÜK HEADER ──
   Widget _buildCompactHeader(String fullName, double avg, bool isCompany, String targetId) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          // Avatar
-          Container(
-            width: 72, height: 72,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [AppColors.primary, AppColors.secondary],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              boxShadow: [BoxShadow(color: AppColors.secondaryWithOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
-            ),
-            child: Center(
-              child: Text(
-                fullName.isNotEmpty ? fullName[0].toUpperCase() : "?",
-                style: const TextStyle(fontSize: 28, color: AppColors.textWhite, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('jobs')
+          .where('acceptedDriverId', isEqualTo: targetId)
+          .where('status', isEqualTo: 'completed')
+          .snapshots(),
+      builder: (context, jobSnap) {
+        int seferCount = jobSnap.data?.docs.length ?? 0;
 
-          // İsim + Puan
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  fullName.isEmpty ? "İsimsiz Kullanıcı" : fullName,
-                  style: AppTextStyles.heading3,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Row(
+        return Container(
+  margin: EdgeInsets.zero, // Yanlardaki boşluğu tamamen kaldırır
+  decoration: const BoxDecoration(
+    color: AppColors.primary,
+    // Kartın üst köşelerini düz, alt köşelerini oval yaparak tam header görünümü sağlar
+    borderRadius: BorderRadius.vertical(
+      bottom: Radius.circular(24), 
+    ),
+  ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                child: Row(
                   children: [
-                    ...List.generate(5, (i) => Icon(
-                      i < avg.floor()
-                          ? Icons.star_rounded
-                          : (i < avg && avg - i >= 0.5)
-                              ? Icons.star_half_rounded
-                              : Icons.star_outline_rounded,
-                      color: AppColors.warning,
-                      size: 16,
-                    )),
-                    const SizedBox(width: 4),
-                    Text(avg.toStringAsFixed(1),
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+                    // Avatar
+                    Container(
+                      width: 68, height: 68,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          colors: [AppColors.primary, AppColors.secondary],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        border: Border.all(
+                          color: AppColors.secondaryWithOpacity(0.4),
+                          width: 3,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          fullName.isNotEmpty ? fullName[0].toUpperCase() : "?",
+                          style: const TextStyle(
+                            fontSize: 26, fontWeight: FontWeight.bold,
+                            color: AppColors.textWhite,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+
+                    // İsim + Puan + Rozet
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            fullName.isEmpty ? "İsimsiz Kullanıcı" : fullName,
+                            style: const TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.bold,
+                              color: AppColors.textWhite,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 5),
+                          Row(
+                            children: [
+                              ...List.generate(5, (i) => Icon(
+                                i < avg.floor()
+                                    ? Icons.star_rounded
+                                    : (i < avg && avg - i >= 0.5)
+                                        ? Icons.star_half_rounded
+                                        : Icons.star_outline_rounded,
+                                color: i < avg.ceil()
+                                    ? AppColors.secondary
+                                    : Colors.white24,
+                                size: 15,
+                              )),
+                              const SizedBox(width: 4),
+                              Text(
+                                avg.toStringAsFixed(1),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textWhiteLight,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.secondaryWithOpacity(0.15),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: AppColors.secondaryWithOpacity(0.3)),
+                            ),
+                            child: Text(
+                              isCompany ? "🏢 Şirket" : "🚛 Sürücü",
+                              style: const TextStyle(
+                                fontSize: 11, fontWeight: FontWeight.w600,
+                                color: AppColors.secondary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Sefer sayısı
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          "$seferCount",
+                          style: const TextStyle(
+                            fontSize: 22, fontWeight: FontWeight.bold,
+                            color: AppColors.textWhite,
+                          ),
+                        ),
+                        const Text(
+                          "Sefer",
+                          style: TextStyle(fontSize: 11, color: AppColors.textWhiteLight),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.secondaryWithOpacity(0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    isCompany ? "🏢 Şirket" : "🚛 Sürücü",
-                    style: const TextStyle(fontSize: 11, color: AppColors.secondary, fontWeight: FontWeight.w600),
+              ),
+
+              // Alt turuncu çizgi
+              Container(
+                height: 3,
+                decoration: BoxDecoration(
+                  color: AppColors.secondaryWithOpacity(0.25),
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(16),
+                    bottomRight: Radius.circular(16),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
