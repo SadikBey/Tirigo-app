@@ -172,27 +172,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final int ratingCount = (userData['ratingCount'] ?? 0).toInt();
           final double avg = ratingCount > 0 ? total / ratingCount : 0.0;
 
-          return SafeArea(
+          return SingleChildScrollView(
             child: Column(
               children: [
-                // ── ÜSTTE AppBar ──
-                _buildAppBar(context),
+                // ── HEADER (AppBar rengiyle birleşik) ──
+                _buildCompactHeader(fullName, avg, isCompany, targetId),
 
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        // ── KÜÇÜK HEADER ──
-                        _buildCompactHeader(fullName, avg, isCompany, targetId),
+                const SizedBox(height: 20),
 
-                        const SizedBox(height: 20),
-
-                        // ── MENÜ LİSTESİ ──
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
+                // ── MENÜ LİSTESİ ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
 
                               if (_isOwnProfile) ...[
                                 _buildMenuTile(
@@ -232,14 +225,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 icon: Icons.phone_outlined,
                                 title: "Telefon",
                                 subtitle: userData['phone'] ?? "Henüz girilmedi",
-                                onTap: _isOwnProfile ? () => _updateField("phone", "Telefon", userData['phone'] ?? "") : null,
+                                onTap: _isOwnProfile ? () => _showPhoneVerificationSheet(userData['phone'] ?? "") : null,
                                 showEdit: _isOwnProfile,
                               ),
                               _buildMenuTile(
                                 icon: Icons.location_city_outlined,
                                 title: "Şehir",
                                 subtitle: userData['city'] ?? "Henüz girilmedi",
-                                onTap: _isOwnProfile ? () => _updateField("city", "Şehir", userData['city'] ?? "") : null,
+                                onTap: _isOwnProfile ? () => _showCityPickerSheet(userData['city'] ?? "") : null,
                                 showEdit: _isOwnProfile,
                               ),
 
@@ -317,15 +310,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ],
                     ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
+                  );
+                },
+              ),
+            );
+          }
 
   // ── APPBAR ──
   Widget _buildAppBar(BuildContext context) {
@@ -353,15 +342,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (context, jobSnap) {
         int seferCount = jobSnap.data?.docs.length ?? 0;
 
-        return Container(
-  margin: EdgeInsets.zero, // Yanlardaki boşluğu tamamen kaldırır
-  decoration: const BoxDecoration(
-    color: AppColors.primary,
-    // Kartın üst köşelerini düz, alt köşelerini oval yaparak tam header görünümü sağlar
-    borderRadius: BorderRadius.vertical(
-      bottom: Radius.circular(24), 
-    ),
-  ),
+          return Container(
+          margin: EdgeInsets.zero,
+          decoration: const BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(20),
+              bottomRight: Radius.circular(20),
+            ),
+          ),
           child: Column(
             children: [
               Padding(
@@ -539,6 +528,521 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ? const Icon(Icons.chevron_right, color: AppColors.textSecondary)
             : null,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
+  }
+
+  // ── 81 İL LİSTESİ ──
+  static const List<String> _cities = [
+    'Adana', 'Adıyaman', 'Afyonkarahisar', 'Ağrı', 'Amasya', 'Ankara', 'Antalya',
+    'Artvin', 'Aydın', 'Balıkesir', 'Bilecik', 'Bingöl', 'Bitlis', 'Bolu',
+    'Burdur', 'Bursa', 'Çanakkale', 'Çankırı', 'Çorum', 'Denizli', 'Diyarbakır',
+    'Edirne', 'Elazığ', 'Erzincan', 'Erzurum', 'Eskişehir', 'Gaziantep', 'Giresun',
+    'Gümüşhane', 'Hakkari', 'Hatay', 'Isparta', 'Mersin', 'İstanbul', 'İzmir',
+    'Kars', 'Kastamonu', 'Kayseri', 'Kırklareli', 'Kırşehir', 'Kocaeli', 'Konya',
+    'Kütahya', 'Malatya', 'Manisa', 'Kahramanmaraş', 'Mardin', 'Muğla', 'Muş',
+    'Nevşehir', 'Niğde', 'Ordu', 'Rize', 'Sakarya', 'Samsun', 'Siirt', 'Sinop',
+    'Sivas', 'Tekirdağ', 'Tokat', 'Trabzon', 'Tunceli', 'Şanlıurfa', 'Uşak',
+    'Van', 'Yozgat', 'Zonguldak', 'Aksaray', 'Bayburt', 'Karaman', 'Kırıkkale',
+    'Batman', 'Şırnak', 'Bartın', 'Ardahan', 'Iğdır', 'Yalova', 'Karabük',
+    'Kilis', 'Osmaniye', 'Düzce',
+  ];
+
+  // ── ŞEHİR SEÇİCİ ──
+  void _showCityPickerSheet(String currentCity) {
+    final searchCtrl = TextEditingController();
+    List<String> filtered = List.from(_cities);
+    String selected = currentCity;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Container(
+          height: MediaQuery.of(ctx).size.height * 0.75,
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+          decoration: const BoxDecoration(
+            color: AppColors.backgroundCard,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // Tutamaç
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Başlık
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryWithOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.location_city_outlined, color: AppColors.primary, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Şehir Seçin", style: AppTextStyles.heading3),
+                      Text("Bulunduğunuz ili seçin",
+                        style: TextStyle(fontSize: 12, color: AppColors.textHint)),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Arama kutusu
+              TextField(
+                controller: searchCtrl,
+                autofocus: false,
+                onChanged: (val) {
+                  setSheet(() {
+                    filtered = _cities
+                        .where((c) => c.toLowerCase().contains(val.toLowerCase()))
+                        .toList();
+                  });
+                },
+                decoration: InputDecoration(
+                  hintText: "İl ara...",
+                  prefixIcon: const Icon(Icons.search, color: AppColors.textHint, size: 20),
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // İl listesi
+              Expanded(
+                child: filtered.isEmpty
+                    ? const Center(
+                        child: Text("Sonuç bulunamadı",
+                          style: TextStyle(color: AppColors.textHint)),
+                      )
+                    : ListView.builder(
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          final city = filtered[index];
+                          final isSelected = city == selected;
+                          return InkWell(
+                            onTap: () => setSheet(() => selected = city),
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                              margin: const EdgeInsets.only(bottom: 4),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? AppColors.primaryWithOpacity(0.08)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(10),
+                                border: isSelected
+                                    ? Border.all(color: AppColors.primaryWithOpacity(0.2))
+                                    : null,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.location_on_rounded,
+                                    size: 16,
+                                    color: isSelected ? AppColors.primary : AppColors.textHint,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    city,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                      color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  if (isSelected) ...[
+                                    const Spacer(),
+                                    const Icon(Icons.check_rounded,
+                                      size: 18, color: AppColors.primary),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+
+              // Kaydet butonu
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
+                child: SizedBox(
+                  width: double.infinity, height: 52,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: selected.isEmpty
+                          ? Colors.grey[300]
+                          : AppColors.secondary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    onPressed: selected.isEmpty ? null : () async {
+                      final uid = FirebaseAuth.instance.currentUser?.uid;
+                      if (uid == null) return;
+                      await FirebaseFirestore.instance
+                          .collection('users').doc(uid)
+                          .update({'city': selected});
+                      if (ctx.mounted) {
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text("$selected kaydedildi ✅"),
+                            backgroundColor: AppColors.success,
+                          ),
+                        );
+                      }
+                    },
+                    child: Text(
+                      selected.isEmpty ? "Şehir Seçin" : "$selected — Kaydet",
+                      style: AppTextStyles.buttonPrimary,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── TELEFON DOĞRULAMA ──
+  void _showPhoneVerificationSheet(String currentPhone) {
+    final phoneCtrl = TextEditingController(text: currentPhone);
+    String? verificationId;
+    bool codeSent = false;
+    bool isLoading = false;
+    final otpControllers = List.generate(6, (_) => TextEditingController());
+    final otpFocusNodes = List.generate(6, (_) => FocusNode());
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 36),
+            decoration: const BoxDecoration(
+              color: AppColors.backgroundCard,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryWithOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.phone_outlined, color: AppColors.primary, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          codeSent ? "Kodu Girin" : "Telefon Güncelle",
+                          style: AppTextStyles.heading3,
+                        ),
+                        Text(
+                          codeSent
+                              ? "SMS ile gelen 6 haneli kodu girin"
+                              : "Doğrulama kodu gönderilecek",
+                          style: const TextStyle(fontSize: 12, color: AppColors.textHint),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                if (!codeSent) ...[
+                  // ── ADIM 1: Telefon girişi ──
+                  const Text("Telefon Numarası", style: AppTextStyles.labelBold),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: "+90 5XX XXX XX XX",
+                      prefixIcon: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                        child: Text("🇹🇷", style: TextStyle(fontSize: 18)),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    "Numara başına +90 eklemeyi unutmayın",
+                    style: TextStyle(fontSize: 11, color: AppColors.textHint),
+                  ),
+                  const SizedBox(height: 24),
+
+                  SizedBox(
+                    width: double.infinity, height: 52,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.secondary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: isLoading ? null : () async {
+                        final phone = phoneCtrl.text.trim();
+                        if (phone.isEmpty || !phone.startsWith('+')) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Lütfen +90 ile başlayan numara girin"),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
+                          return;
+                        }
+                        setSheet(() => isLoading = true);
+
+                        await FirebaseAuth.instance.verifyPhoneNumber(
+                          phoneNumber: phone,
+                          timeout: const Duration(seconds: 60),
+                          verificationCompleted: (PhoneAuthCredential credential) async {
+                            // Android otomatik doğrulama — sadece Firestore'a kaydet
+                            final uid = FirebaseAuth.instance.currentUser?.uid;
+                            if (uid != null) {
+                              await FirebaseFirestore.instance
+                                  .collection('users').doc(uid)
+                                  .update({'phone': phone});
+                            }
+                            if (ctx.mounted) {
+                              Navigator.pop(ctx);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Telefon numarası doğrulandı! ✅"),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                            }
+                          },
+                          verificationFailed: (FirebaseAuthException e) {
+                            setSheet(() => isLoading = false);
+                            String msg = "Doğrulama başarısız";
+                            if (e.code == 'invalid-phone-number') msg = "Geçersiz telefon numarası";
+                            if (e.code == 'too-many-requests') msg = "Çok fazla deneme, lütfen bekleyin";
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(msg), backgroundColor: AppColors.error),
+                            );
+                          },
+                          codeSent: (String verId, int? resendToken) {
+                            verificationId = verId;
+                            setSheet(() {
+                              codeSent = true;
+                              isLoading = false;
+                            });
+                            Future.delayed(const Duration(milliseconds: 300), () {
+                              if (otpFocusNodes[0].canRequestFocus) {
+                                otpFocusNodes[0].requestFocus();
+                              }
+                            });
+                          },
+                          codeAutoRetrievalTimeout: (String verId) {
+                            verificationId = verId;
+                          },
+                        );
+                      },
+                      child: isLoading
+                          ? const SizedBox(
+                              height: 22, width: 22,
+                              child: CircularProgressIndicator(
+                                color: AppColors.textWhite, strokeWidth: 2.5,
+                              ),
+                            )
+                          : const Text("SMS Gönder", style: AppTextStyles.buttonPrimary),
+                    ),
+                  ),
+
+                ] else ...[
+                  // ── ADIM 2: OTP girişi ──
+                  const Text("Doğrulama Kodu", style: AppTextStyles.labelBold),
+                  const SizedBox(height: 14),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: List.generate(6, (i) => SizedBox(
+                      width: 46, height: 56,
+                      child: TextField(
+                        controller: otpControllers[i],
+                        focusNode: otpFocusNodes[i],
+                        textAlign: TextAlign.center,
+                        keyboardType: TextInputType.number,
+                        maxLength: 1,
+                        style: const TextStyle(
+                          fontSize: 22, fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                        decoration: InputDecoration(
+                          counterText: '',
+                          filled: true,
+                          fillColor: Colors.grey[100],
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: AppColors.secondary, width: 2),
+                          ),
+                        ),
+                        onChanged: (val) {
+                          if (val.isNotEmpty && i < 5) {
+                            otpFocusNodes[i + 1].requestFocus();
+                          } else if (val.isEmpty && i > 0) {
+                            otpFocusNodes[i - 1].requestFocus();
+                          }
+                        },
+                      ),
+                    )),
+                  ),
+                  const SizedBox(height: 6),
+
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () {
+                        for (final c in otpControllers) { c.clear(); }
+                        setSheet(() => codeSent = false);
+                      },
+                      child: const Text(
+                        "Kodu tekrar gönder",
+                        style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  SizedBox(
+                    width: double.infinity, height: 52,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.secondary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: isLoading ? null : () async {
+                        final otp = otpControllers.map((c) => c.text).join();
+                        if (otp.length < 6) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("Lütfen 6 haneli kodu tam girin"),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
+                          return;
+                        }
+                        setSheet(() => isLoading = true);
+                        try {
+                          // Sadece kodu doğrula — updatePhoneNumber KULLANMA
+                          final credential = PhoneAuthProvider.credential(
+                            verificationId: verificationId!,
+                            smsCode: otp,
+                          );
+                          // Geçici hesapla doğrulama yap (sign-in değil, sadece verify)
+                          await FirebaseAuth.instance.signInWithCredential(credential);
+
+                          // Firestore'a kaydet
+                          final uid = FirebaseAuth.instance.currentUser?.uid;
+                          if (uid != null) {
+                            await FirebaseFirestore.instance
+                                .collection('users').doc(uid)
+                                .update({'phone': phoneCtrl.text.trim()});
+                          }
+                          if (ctx.mounted) {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Telefon numarası kaydedildi! ✅"),
+                                backgroundColor: AppColors.success,
+                              ),
+                            );
+                          }
+                        } on FirebaseAuthException catch (e) {
+                          setSheet(() => isLoading = false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                e.code == 'invalid-verification-code'
+                                    ? "Hatalı kod, tekrar deneyin"
+                                    : "Hata: ${e.message}",
+                              ),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
+                        }
+                      },
+                      child: isLoading
+                          ? const SizedBox(
+                              height: 22, width: 22,
+                              child: CircularProgressIndicator(
+                                color: AppColors.textWhite, strokeWidth: 2.5,
+                              ),
+                            )
+                          : const Text("Doğrula & Kaydet", style: AppTextStyles.buttonPrimary),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

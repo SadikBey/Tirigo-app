@@ -76,13 +76,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
         backgroundColor: AppColors.primary,
         elevation: 0,
         centerTitle: true,
-        title: _buildAppBarTitle(), // Senin mevcut fonksiyonun kalıyor
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.only(
-            bottomLeft: Radius.circular(20),
-            bottomRight: Radius.circular(20),
-          ),
-        ),
+        title: _buildAppBarTitle(),
         bottom: _selectedIndex == 1
             ? TabBar(
                 controller: _tabController,
